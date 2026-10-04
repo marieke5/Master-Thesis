@@ -1,0 +1,10 @@
+Metadata-Version: 2.4
+Name: lcoh-tool
+Version: 0.1.0
+Summary: Techno-oekonomisches Tool zur LCOH-Analyse eines Windpark-Direktanschlusses an Waermeerzeuger
+Requires-Python: >=3.10
+Requires-Dist: pandas>=2.0
+Requires-Dist: numpy>=1.24
+Requires-Dist: PyYAML>=6.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.4; extra == "dev"
