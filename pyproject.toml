@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "PtH-Tool"
+name = "lcoh-tool"
 version = "0.1.0"
 description = "Techno-oekonomisches Tool zur LCOH-Analyse eines Windpark-Direktanschlusses an Waermeerzeuger"
 requires-python = ">=3.10"
