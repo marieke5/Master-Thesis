@@ -50,30 +50,3 @@ Jedes Modul deckt einen Baustein aus dem Exposee ab (Erzeugungsprofil,
 Wärmebedarf, techno-ökonomische Analyse inkl. Anschlusskosten und
 Versorgungssicherheit) und kann unabhängig weiterentwickelt und getestet
 werden.
-
-## Setup
-
-```bash
-python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-pip install -e .                   # Paket im "editable"-Modus installieren
-```
-
-## Ausführen
-
-```bash
-python -m lcoh_tool.main --config config/beispiel_siebeneichen.yaml
-```
-
-## Tests
-
-```bash
-pytest
-```
-
-## Status
-
-Erstes Gerüst (Platzhalter-Logik in `bilanz.py` und `wirtschaftlichkeit.py`,
-lauffähig mit Beispieldaten). Die eigentliche Modellierung wird im Laufe der
-Bearbeitung ergänzt.
