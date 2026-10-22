@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.venv/
+venv/
+build/
+dist/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# VS Code (bewusst NICHT ignoriert: settings.json, damit Projekt-Setup geteilt wird)
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Ergebnisse / große oder sensible Inputdaten
+outputs/
+*.xlsx
+!config/**/*.yaml
+
+# OS
+.DS_Store
+Thumbs.db

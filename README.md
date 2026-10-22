@@ -3,8 +3,7 @@
 Python-Tool zur techno-ökonomischen Analyse eines netzentgeltfreien
 **Direktanschlusses** eines Windparks an Wärmeerzeuger (Wärmepumpe,
 Elektrodenkessel/Gaskessel als Backup) mit Wärmespeicher. Zentrale
-Zielgröße ist die **LCOH** (Levelized Cost of Heat, Wärmegestehungskosten),
-optional im Vergleich zur fossilen Referenzversorgung.
+Zielgröße ist die **LCOH** (Levelized Cost of Heat, Wärmegestehungskosten).
 
 Teil der Masterarbeit von Marieke Stein (Sustainable Energy Engineering,
 Europa-Universität Flensburg) in Kooperation mit Green Wind Energy GmbH.
@@ -15,8 +14,10 @@ Anwendungsfall: Windpark- und Nahwärmeprojekt in Siebeneichen (Amt Büchen).
 - **Input Windpark:** stundenscharfes Erzeugungsprofil (CSV, 8.760 Werte/Jahr),
   extern erstellt (Ertragsgutachten o. Ä.) — die Erzeugung selbst wird
   **nicht** im Tool modelliert.
-- **Input Wärmebedarf:** stundenscharfe Wärmelast (CSV oder synthetisch
-  über ein Referenzlastprofil).
+- **Input Wärmebedarf:** Gesamtwärmebedarf pro Jahr. Das Tool verteilt ihn
+  über die hinterlegten BDEW-Standardlastprofile (SigLinDe-Verfahren, Mix
+  aus z. B. EFH/MFH/GHD) und eine stündliche Temperaturreihe auf die
+  Stunden. Alternativ lässt sich eine gemessene Wärmelast als CSV einlesen.
 - **Bilanz:** Für jede Stunde wird geprüft, ob die Windleistung den
   Strombedarf der Wärmeerzeugung deckt (→ Direktanschluss, netzentgeltfrei)
   oder ob auf Netzbezug zurückgefallen werden muss (→ Rückfallstrom, mit
@@ -24,8 +25,7 @@ Anwendungsfall: Windpark- und Nahwärmeprojekt in Siebeneichen (Amt Büchen).
 - **Wärmeerzeugung:** Wärmepumpe als Hauptquelle, Elektrodenkessel oder
   Gaskessel als zu Beginn wählbares Backup; das Tool ist so aufgebaut, dass
   weitere Quellen (z. B. Industrieabwärme) später ergänzt werden können.
-- **Output:** LCOH der Direktanschluss-Versorgung; optional LCOH der
-  fossilen Referenzversorgung (aktueller Gas-/Ölkessel) zum Vergleich.
+- **Output:** LCOH der Direktanschluss-Versorgung.
 - **Explizit außerhalb des Scopes:** Umbau/Erweiterung des Nahwärmenetzes
   selbst sowie die Modellierung der Windenergieerzeugung.
 
@@ -35,7 +35,7 @@ Anwendungsfall: Windpark- und Nahwärmeprojekt in Siebeneichen (Amt Büchen).
 master-thesis/
 ├── config/                    Beispiel-Konfigurationen (YAML)
 ├── data/                      Beispiel-Inputdaten (CSV)
-├── src/lcoh_tool/             Python-Paket mit den Tool-Modulen
+├── src/pth_tool/              Python-Paket mit den Tool-Modulen
 │   ├── config.py              Konfiguration laden/validieren
 │   ├── erzeugungsprofil.py    Windpark-Erzeugungsprofil einlesen
 │   ├── waermebedarf.py        Wärmelastprofil einlesen/generieren
@@ -63,7 +63,7 @@ pip install -e .                   # Paket im "editable"-Modus installieren
 ## Ausführen
 
 ```bash
-python -m lcoh_tool.main --config config/beispiel_siebeneichen.yaml
+python -m pth_tool.main --config config/beispiel_siebeneichen.yaml
 ```
 
 ## Tests
