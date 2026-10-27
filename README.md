@@ -16,8 +16,10 @@ Anwendungsfall: Windpark- und Nahwärmeprojekt in Siebeneichen (Amt Büchen).
   **nicht** im Tool modelliert.
 - **Input Wärmebedarf:** Gesamtwärmebedarf pro Jahr. Das Tool verteilt ihn
   über die hinterlegten BDEW-Standardlastprofile (SigLinDe-Verfahren, Mix
-  aus z. B. EFH/MFH/GHD) und eine stündliche Temperaturreihe auf die
-  Stunden. Alternativ lässt sich eine gemessene Wärmelast als CSV einlesen.
+  aus z. B. EFH/MFH/GHD) auf die Stunden. Das Profil ist nicht
+  standortspezifisch: Als Temperaturreihe dient fest das
+  DWD-Testreferenzjahr 2010, Region 4 (Potsdam). Alternativ lässt sich eine
+  gemessene Wärmelast als CSV einlesen.
 - **Bilanz:** Für jede Stunde wird geprüft, ob die Windleistung den
   Strombedarf der Wärmeerzeugung deckt (→ Direktanschluss, netzentgeltfrei)
   oder ob auf Netzbezug zurückgefallen werden muss (→ Rückfallstrom, mit
