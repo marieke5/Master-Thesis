@@ -1,6 +1,11 @@
 from pathlib import Path
 
-from lcoh_tool.waermebedarf import load_waermebedarf, synthetische_waermelast
+from lcoh_tool.waermebedarf import (
+    GebaeudeLastparameter,
+    lastverteilung_platzhalter,
+    load_waermebedarf,
+    synthetische_waermelast,
+)
 
 BEISPIEL_CSV = Path(__file__).parents[1] / "data" / "waermelast_beispiel.csv"
 
@@ -22,3 +27,11 @@ def pytest_approx_mwh(mwh: float):
     import pytest
 
     return pytest.approx(mwh * 1000, rel=1e-6)
+
+
+def test_lastverteilung_platzhalter_nutzt_gesamtwaermebedarf():
+    parameter = GebaeudeLastparameter(gesamtwaermebedarf_mwh=3500, anzahl_gebaeude=12)
+    lastprofil = lastverteilung_platzhalter(parameter)
+
+    assert len(lastprofil) == 8760
+    assert lastprofil.sum() == pytest_approx_mwh(3500)

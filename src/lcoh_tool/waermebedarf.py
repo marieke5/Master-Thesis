@@ -2,22 +2,35 @@
 
 Zwei Wege sind vorgesehen (siehe Config):
 1. Eine vorliegende stundenscharfe CSV-Zeitreihe wird direkt eingelesen.
-2. Fallback: aus einem Jahreswaermebedarf wird - als Platzhalter fuer ein
-   spaeteres Referenzlastprofil (z. B. VDI 4655/2067) - eine vereinfachte
-   synthetische Lastkurve erzeugt.
+2. Fallback: aus Gesamtwaermebedarf + Gebaeudeanzahl wird ueber eine im Tool
+   hinterlegte Lastverteilung ("Lastverteilung Norddeutschland") eine
+   stundenscharfe Lastkurve erzeugt.
 
-Die synthetische Erzeugung ist bewusst simpel gehalten und als TODO fuer die
-methodische Vertiefung markiert.
+Die aktuell hinterlegte Lastverteilung ist ein Platzhalter (einfaches
+saisonales Muster) und TODO: durch ein echtes Referenzprofil aus der App
+nPro ersetzen, sobald der Export vorliegt. Die Gebaeudeanzahl wird bereits
+als Parameter durchgereicht, auch wenn die Platzhalter-Verteilung sie noch
+nicht nutzt - sobald das nPro-Profil nach Gebaeudetyp/-groesse differenziert,
+kann es hier eingebaut werden, ohne die Schnittstelle zu aendern.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 STUNDEN_PRO_JAHR = 8760
+
+
+@dataclass
+class GebaeudeLastparameter:
+    """Eingabe fuer die Lastverteilung: Gesamtwaermebedarf + Gebaeudeanzahl."""
+
+    gesamtwaermebedarf_mwh: float
+    anzahl_gebaeude: int = 1
 
 
 def load_waermebedarf(pfad: str | Path) -> pd.Series:
@@ -54,7 +67,7 @@ def synthetische_waermelast(
     zeitstempel = pd.date_range(
         start=f"{jahr}-01-01", periods=STUNDEN_PRO_JAHR, freq="h"
     )
-    tag_des_jahres = zeitstempel.dayofyear.to_numpy()
+    tag_des_jahres = zeitstempel.day_of_year.to_numpy()
 
     # Einfaches saisonales Gewicht: Maximum im Winter (Tag 1/365), Minimum im
     # Sommer (Tag ~182), reine Platzhalter-Heuristik.
@@ -65,3 +78,23 @@ def synthetische_waermelast(
     werte = gewicht_normiert * jahreswaermebedarf_kwh
 
     return pd.Series(werte, index=zeitstempel, name="waermelast_kwh")
+
+
+def lastverteilung_platzhalter(
+    parameter: GebaeudeLastparameter,
+    jahr: int = 2027,
+) -> pd.Series:
+    """Platzhalter fuer die "Lastverteilung Norddeutschland".
+
+    Nimmt Gesamtwaermebedarf + Gebaeudeanzahl entgegen (so wie im Tool-Ablauf
+    vorgesehen) und verteilt den Gesamtwaermebedarf aktuell ueber dasselbe
+    einfache saisonale Muster wie ``synthetische_waermelast`` - die
+    Gebaeudeanzahl geht noch nicht in die Form der Kurve ein, nur in die
+    Dokumentation der Schnittstelle.
+
+    TODO: durch das Referenzprofil aus nPro ersetzen, sobald der Export
+    vorliegt. Sobald dieses Profil nach Gebaeudetyp/-anzahl differenziert,
+    kann ``parameter.anzahl_gebaeude`` hier tatsaechlich verwendet werden,
+    ohne dass sich main.py oder die Config aendern muessen.
+    """
+    return synthetische_waermelast(parameter.gesamtwaermebedarf_mwh, jahr)

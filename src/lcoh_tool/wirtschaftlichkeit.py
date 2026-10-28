@@ -27,9 +27,10 @@ def annuitaetsfaktor(wacc: float, laufzeit_jahre: int) -> float:
 
 @dataclass
 class LCOHErgebnis:
-    lcoh_eur_pro_mwh: float
+    lcoh_eur_pro_mwh: float  # fuer das aktive Strompreisszenario (config.wirtschaft.strompreisszenario_aktiv)
+    lcoh_je_strompreisszenario_eur_pro_mwh: dict[str, float]
     jahreskosten_kapital_eur: float
-    jahreskosten_betrieb_eur: float
+    jahreskosten_betrieb_eur: float  # fuer das aktive Szenario
     jaehrliche_waermemenge_mwh: float
     lcoh_fossile_referenz_eur_pro_mwh: float | None = None
 
@@ -39,7 +40,10 @@ def berechne_lcoh(bilanz: pd.DataFrame, config: ToolConfig) -> LCOHErgebnis:
 
     ``bilanz`` ist das Ergebnis von ``bilanz.berechne_bilanz`` und enthaelt
     u. a. die Spalten ``waermelast_kwh``, ``direktanschluss_kwh`` und
-    ``rueckfall_kwh``.
+    ``rueckfall_kwh``. Die LCOH wird fuer alle drei Strompreisszenarien
+    (best_case/realistisch/worst_case) berechnet, damit die Bandbreite auf
+    einen Blick sichtbar ist; ``lcoh_eur_pro_mwh`` ist davon der Wert fuer
+    das in der Config als aktiv markierte Szenario.
     """
     wirtschaft = config.wirtschaft
 
@@ -53,15 +57,22 @@ def berechne_lcoh(bilanz: pd.DataFrame, config: ToolConfig) -> LCOHErgebnis:
     jahreskosten_kapital = capex_gesamt * af
 
     rueckfall_kwh = bilanz["rueckfall_kwh"].sum()
-    kosten_rueckfallstrom = rueckfall_kwh / 1000 * (
-        wirtschaft.strompreis_rueckfall_eur_pro_mwh
-        + wirtschaft.netzentgelt_eur_pro_mwh
-    )
-    jahreskosten_betrieb = wirtschaft.opex_fix_eur_pro_jahr + kosten_rueckfallstrom
-
     jaehrliche_waermemenge_mwh = bilanz["waermelast_kwh"].sum() / 1000
 
-    lcoh = (jahreskosten_kapital + jahreskosten_betrieb) / jaehrliche_waermemenge_mwh
+    lcoh_je_szenario: dict[str, float] = {}
+    jahreskosten_betrieb_je_szenario: dict[str, float] = {}
+    for szenario in ("best_case", "realistisch", "worst_case"):
+        strompreis = wirtschaft.strompreisszenarien.preis(szenario)
+        kosten_rueckfallstrom = rueckfall_kwh / 1000 * (
+            strompreis + wirtschaft.netzentgelt_eur_pro_mwh
+        )
+        jahreskosten_betrieb = wirtschaft.opex_fix_eur_pro_jahr + kosten_rueckfallstrom
+        jahreskosten_betrieb_je_szenario[szenario] = jahreskosten_betrieb
+        lcoh_je_szenario[szenario] = (
+            jahreskosten_kapital + jahreskosten_betrieb
+        ) / jaehrliche_waermemenge_mwh
+
+    szenario_aktiv = wirtschaft.strompreisszenario_aktiv
 
     lcoh_referenz = None
     if config.fossile_referenz.aktiv:
@@ -70,9 +81,10 @@ def berechne_lcoh(bilanz: pd.DataFrame, config: ToolConfig) -> LCOHErgebnis:
         )
 
     return LCOHErgebnis(
-        lcoh_eur_pro_mwh=lcoh,
+        lcoh_eur_pro_mwh=lcoh_je_szenario[szenario_aktiv],
+        lcoh_je_strompreisszenario_eur_pro_mwh=lcoh_je_szenario,
         jahreskosten_kapital_eur=jahreskosten_kapital,
-        jahreskosten_betrieb_eur=jahreskosten_betrieb,
+        jahreskosten_betrieb_eur=jahreskosten_betrieb_je_szenario[szenario_aktiv],
         jaehrliche_waermemenge_mwh=jaehrliche_waermemenge_mwh,
         lcoh_fossile_referenz_eur_pro_mwh=lcoh_referenz,
     )

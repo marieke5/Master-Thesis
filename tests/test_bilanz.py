@@ -4,6 +4,7 @@ from lcoh_tool.bilanz import berechne_bilanz
 from lcoh_tool.config import (
     BackupConfig,
     SpeicherConfig,
+    Strompreisszenarien,
     ToolConfig,
     WaermebedarfConfig,
     WaermepumpeConfig,
@@ -23,7 +24,11 @@ def _minimal_config(jazl=3.0, speicher_kwh=0.0) -> ToolConfig:
         wirtschaft=WirtschaftConfig(
             wacc=0.05,
             abschreibungsdauer_jahre=20,
-            strompreis_rueckfall_eur_pro_mwh=90,
+            strompreisszenarien=Strompreisszenarien(
+                best_case_eur_pro_mwh=70,
+                realistisch_eur_pro_mwh=90,
+                worst_case_eur_pro_mwh=130,
+            ),
             netzentgelt_eur_pro_mwh=40,
         ),
     )

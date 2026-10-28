@@ -5,6 +5,7 @@ from lcoh_tool.config import (
     BackupConfig,
     FossileReferenzConfig,
     SpeicherConfig,
+    Strompreisszenarien,
     ToolConfig,
     WaermebedarfConfig,
     WaermepumpeConfig,
@@ -41,7 +42,11 @@ def test_berechne_lcoh_ohne_rueckfallstrom():
         wirtschaft=WirtschaftConfig(
             wacc=0.0,
             abschreibungsdauer_jahre=10,
-            strompreis_rueckfall_eur_pro_mwh=90,
+            strompreisszenarien=Strompreisszenarien(
+                best_case_eur_pro_mwh=70,
+                realistisch_eur_pro_mwh=90,
+                worst_case_eur_pro_mwh=130,
+            ),
             netzentgelt_eur_pro_mwh=40,
             capex_waermepumpe_eur=10000,
             opex_fix_eur_pro_jahr=100,
@@ -50,10 +55,51 @@ def test_berechne_lcoh_ohne_rueckfallstrom():
 
     ergebnis = berechne_lcoh(bilanz, config)
 
-    # Kapitalkosten p.a.: 10000/10 = 1000; Betriebskosten: 100 (kein Rueckfallstrom)
-    # Waermemenge: 2000 kWh = 2 MWh -> LCOH = 1100 / 2 = 550 EUR/MWh
+    # Kapitalkosten p.a.: 10000/10 = 1000; Betriebskosten: 100 (kein Rueckfallstrom,
+    # daher unabhaengig vom Strompreisszenario); Waermemenge: 2000 kWh = 2 MWh
+    # -> LCOH = 1100 / 2 = 550 EUR/MWh, in allen drei Szenarien gleich.
     assert ergebnis.lcoh_eur_pro_mwh == pytest.approx(550.0)
+    for lcoh in ergebnis.lcoh_je_strompreisszenario_eur_pro_mwh.values():
+        assert lcoh == pytest.approx(550.0)
     assert ergebnis.lcoh_fossile_referenz_eur_pro_mwh is None
+
+
+def test_berechne_lcoh_unterscheidet_strompreisszenarien():
+    bilanz = pd.DataFrame(
+        {
+            "waermelast_kwh": [1000.0],
+            "direktanschluss_kwh": [0.0],
+            "rueckfall_kwh": [1000.0],  # voller Rueckfall, Szenarien wirken direkt
+        }
+    )
+    config = ToolConfig(
+        projektname="Test",
+        windpark=WindparkConfig(erzeugungsprofil_pfad="irrelevant.csv"),
+        waermebedarf=WaermebedarfConfig(),
+        waermepumpe=WaermepumpeConfig(jazl=3.0, nennleistung_kw=100),
+        backup=BackupConfig(typ="elektrodenkessel", wirkungsgrad=0.98, nennleistung_kw=100),
+        speicher=SpeicherConfig(kapazitaet_kwh=0),
+        wirtschaft=WirtschaftConfig(
+            wacc=0.0,
+            abschreibungsdauer_jahre=10,
+            strompreisszenarien=Strompreisszenarien(
+                best_case_eur_pro_mwh=70,
+                realistisch_eur_pro_mwh=90,
+                worst_case_eur_pro_mwh=130,
+            ),
+            strompreisszenario_aktiv="worst_case",
+            netzentgelt_eur_pro_mwh=0,
+        ),
+    )
+
+    ergebnis = berechne_lcoh(bilanz, config)
+
+    # 1 MWh Rueckfallstrom, kein Netzentgelt -> Betriebskosten = Strompreis selbst
+    assert ergebnis.lcoh_je_strompreisszenario_eur_pro_mwh["best_case"] == pytest.approx(70.0)
+    assert ergebnis.lcoh_je_strompreisszenario_eur_pro_mwh["realistisch"] == pytest.approx(90.0)
+    assert ergebnis.lcoh_je_strompreisszenario_eur_pro_mwh["worst_case"] == pytest.approx(130.0)
+    # aktives Szenario ist worst_case -> lcoh_eur_pro_mwh muss damit uebereinstimmen
+    assert ergebnis.lcoh_eur_pro_mwh == pytest.approx(130.0)
 
 
 def test_berechne_lcoh_mit_fossiler_referenz():
@@ -74,7 +120,11 @@ def test_berechne_lcoh_mit_fossiler_referenz():
         wirtschaft=WirtschaftConfig(
             wacc=0.0,
             abschreibungsdauer_jahre=10,
-            strompreis_rueckfall_eur_pro_mwh=90,
+            strompreisszenarien=Strompreisszenarien(
+                best_case_eur_pro_mwh=70,
+                realistisch_eur_pro_mwh=90,
+                worst_case_eur_pro_mwh=130,
+            ),
             netzentgelt_eur_pro_mwh=40,
         ),
         fossile_referenz=FossileReferenzConfig(
