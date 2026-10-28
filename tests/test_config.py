@@ -4,16 +4,16 @@ import pytest
 
 from lcoh_tool.config import load_config
 
-BEISPIEL_CONFIG = Path(__file__).parents[1] / "config" / "beispiel_siebeneichen.yaml"
+PARAMETER_CONFIG = Path(__file__).parents[1] / "config" / "parameter.yaml"
 
 
 def test_load_config_liest_projektname():
-    config = load_config(BEISPIEL_CONFIG)
-    assert config.projektname == "Siebeneichen - Direktanschluss Windpark an Nahwaermenetz"
+    config = load_config(PARAMETER_CONFIG)
+    assert config.projektname == "Direktanschluss Windpark an Waermeerzeuger (Parameterbeispiel)"
 
 
 def test_load_config_setzt_verschachtelte_werte():
-    config = load_config(BEISPIEL_CONFIG)
+    config = load_config(PARAMETER_CONFIG)
     assert config.waermepumpe.jazl == pytest.approx(3.2)
     assert config.backup.typ == "elektrodenkessel"
     assert config.wirtschaft.wacc == pytest.approx(0.05)
@@ -21,7 +21,7 @@ def test_load_config_setzt_verschachtelte_werte():
 
 
 def test_load_config_liest_strompreisszenarien():
-    config = load_config(BEISPIEL_CONFIG)
+    config = load_config(PARAMETER_CONFIG)
     szenarien = config.wirtschaft.strompreisszenarien
     assert szenarien.best_case_eur_pro_mwh == pytest.approx(70)
     assert szenarien.realistisch_eur_pro_mwh == pytest.approx(90)

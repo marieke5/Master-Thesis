@@ -2,7 +2,7 @@
 LCOH-Berechnung aus und gibt das Ergebnis aus.
 
 Aufruf:
-    python -m lcoh_tool.main --config config/beispiel_siebeneichen.yaml
+    python -m lcoh_tool.main --config config/parameter.yaml
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--config",
         required=True,
-        help="Pfad zur YAML-Konfigurationsdatei (siehe config/beispiel_siebeneichen.yaml)",
+        help="Pfad zur YAML-Konfigurationsdatei (siehe config/parameter.yaml)",
     )
     return parser.parse_args()
 

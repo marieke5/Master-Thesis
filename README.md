@@ -37,7 +37,7 @@ Anwendungsfall: Windpark- und Nahwärmeprojekt in Siebeneichen (Amt Büchen).
 master-thesis/
 ├── config/                    Beispiel-Konfigurationen (YAML)
 ├── data/                      Beispiel-Inputdaten (CSV)
-├── src/pth_tool/              Python-Paket mit den Tool-Modulen
+├── src/lcoh_tool/              Python-Paket mit den Tool-Modulen
 │   ├── config.py              Konfiguration laden/validieren
 │   ├── erzeugungsprofil.py    Windpark-Erzeugungsprofil einlesen
 │   ├── waermebedarf.py        Wärmelastprofil einlesen/generieren
@@ -65,7 +65,7 @@ pip install -e .                   # Paket im "editable"-Modus installieren
 ## Ausführen
 
 ```bash
-python -m pth_tool.main --config config/beispiel_siebeneichen.yaml
+python -m lcoh_tool.main --config config/parameter.yaml
 ```
 
 ## Tests
