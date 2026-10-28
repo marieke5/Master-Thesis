@@ -2,7 +2,7 @@
 
 Python-Tool zur techno-ökonomischen Analyse eines netzentgeltfreien
 **Direktanschlusses** eines Windparks an Wärmeerzeuger (Wärmepumpe,
-Elektrodenkessel/Gaskessel als Backup) mit Wärmespeicher. Zentrale
+Elektrodenkessel als Backup) mit Wärmespeicher. Zentrale
 Zielgröße ist die **LCOH** (Levelized Cost of Heat, Wärmegestehungskosten).
 
 Teil der Masterarbeit von Marieke Stein (Sustainable Energy Engineering,
@@ -24,9 +24,10 @@ Anwendungsfall: Windpark- und Nahwärmeprojekt in Siebeneichen (Amt Büchen).
   Strombedarf der Wärmeerzeugung deckt (→ Direktanschluss, netzentgeltfrei)
   oder ob auf Netzbezug zurückgefallen werden muss (→ Rückfallstrom, mit
   Netzentgelt).
-- **Wärmeerzeugung:** Wärmepumpe als Hauptquelle, Elektrodenkessel oder
-  Gaskessel als zu Beginn wählbares Backup; das Tool ist so aufgebaut, dass
-  weitere Quellen (z. B. Industrieabwärme) später ergänzt werden können.
+- **Wärmeerzeugung:** Wärmepumpe als Hauptquelle, Elektrodenkessel als
+  Backup; das Tool ist so aufgebaut, dass weitere Quellen (z. B. ein
+  Gaskessel als Backup-Alternative, Industrieabwärme) später ergänzt
+  werden können.
 - **Output:** LCOH der Direktanschluss-Versorgung.
 - **Explizit außerhalb des Scopes:** Umbau/Erweiterung des Nahwärmenetzes
   selbst sowie die Modellierung der Windenergieerzeugung.
