@@ -6,48 +6,44 @@ projektname: "Direktanschluss Windpark an Waermeerzeuger (Parameterbeispiel)"
 
 windpark:
   # Quelle 1 (Standard): projektbezogene CSV, z. B. aus dem Ertragsgutachten
-  quelle: csv
+  quelle: windpowerlib
   erzeugungsprofil_pfad: "data/erzeugungsprofil_beispiel.csv"
   # Quelle 2: Schnellabschaetzung mit windpowerlib (grob, ersetzt kein Gutachten).
   # Setup: pip install -e ".[wind]"
   # quelle: windpowerlib
-  # windpowerlib:
-  #   breitengrad: 53.6
-  #   laengengrad: 10.6
-  #   jahr: 2023
-  #   anlagentyp: "E-141/4200"   # Name aus der windpowerlib-Anlagendatenbank
-  #   nabenhoehe_m: 129
-  #   anzahl_anlagen: 3
-  #   parkwirkungsgrad: 0.9
-  #   # era5: Copernicus CDS (CDS-Account noetig, auch kommerziell nutzbar) - Standard
-  #   # open_meteo: nur fuer Demo/nicht-kommerziell (Lizenz der kostenlosen API)
-  #   # csv: eigene Wetterdatei (wetter_pfad, wind_messhoehe_m)
-  #   wetterquelle: era5
+  windpowerlib:
+     breitengrad: 53.6
+     laengengrad: 10.6
+     jahr: 2023
+     anlagentyp: "E-141/4200"   # Name aus der windpowerlib-Anlagendatenbank
+     nabenhoehe_m: 129
+     anzahl_anlagen: 3
+     parkwirkungsgrad: 0.9
+     # era5: Copernicus CDS (CDS-Account noetig, auch kommerziell nutzbar) - Standard
+     # open_meteo: nur fuer Demo/nicht-kommerziell (Lizenz der kostenlosen API)
+     # csv: eigene Wetterdatei (wetter_pfad, wind_messhoehe_m)
+     wetterquelle: era5
 
 waermebedarf:
-  # Vorrang 1: projektbezogene CSV (stundenscharf)
-  waermelast_pfad: "data/waermelast_beispiel.csv"
-  # Vorrang 2 (waermelast_pfad auskommentieren): Profil aus Gebaeudetypen ueber
-  # lpagg (VDI 4655 / BDEW, DWD-Testreferenzjahr). Setup: pip install -e ".[lpagg]"
-  # lpagg:
-  #   try_region: 4             # DWD-TRY-Region 1..15 (4 = Potsdam)
-  #   jahr: 2027
-  #   feiertage_bundesland: SH
-  #   gebaeude:
-  #     EFH:
-  #       house_type: EFH
-  #       q_heiz_a_kwh: 15000   # je Gebaeude
-  #       anzahl: 40
-  #       n_pers: 3
-  #       n_we: 1
-  #       sigma: 4              # Zeitversatz der Kopien (Gleichzeitigkeit)
-  #     MFH:
-  #       house_type: MFH
-  #       q_heiz_a_kwh: 80000
-  #       anzahl: 5
-  #       n_pers: 30
-  #       n_we: 10
-  #       sigma: 2
+  lpagg:
+    try_region: 4
+    jahr: 2027
+    feiertage_bundesland: SH
+    gebaeude:
+      EFH:
+        house_type: EFH
+        q_heiz_a_kwh: 15000
+        anzahl: 40
+        n_pers: 3
+        n_we: 1
+        sigma: 4
+      MFH:
+        house_type: MFH
+        q_heiz_a_kwh: 80000
+        anzahl: 5
+        n_pers: 30
+        n_we: 10
+        sigma: 2
   # Vorrang 3: nur Jahreswert, einfaches saisonales Platzhalter-Muster
   # jahreswaermebedarf_mwh: 3500
 
