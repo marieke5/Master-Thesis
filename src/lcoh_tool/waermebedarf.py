@@ -1,10 +1,10 @@
 """Einlesen bzw. Bereitstellen der stundenscharfen Waermelast.
 
-Zwei Wege sind vorgesehen (siehe Config):
+Drei Wege sind vorgesehen (siehe Config und ``projekt.py``):
 1. Eine vorliegende stundenscharfe CSV-Zeitreihe wird direkt eingelesen.
-2. Fallback: aus Gesamtwaermebedarf + Gebaeudeanzahl wird ueber eine im Tool
-   hinterlegte Lastverteilung ("Lastverteilung Norddeutschland") eine
-   stundenscharfe Lastkurve erzeugt.
+2. Gebaeudetypen und -anzahl: Profil ueber lpagg (``lastprofil_lpagg.py``).
+3. Fallback: aus dem Gesamtwaermebedarf wird ueber ein einfaches saisonales
+   Muster eine stundenscharfe Lastkurve erzeugt.
 
 Die aktuell hinterlegte Lastverteilung ist ein Platzhalter (einfaches
 saisonales Muster) und TODO: durch ein echtes Referenzprofil aus der App
@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -33,19 +34,23 @@ class GebaeudeLastparameter:
     anzahl_gebaeude: int = 1
 
 
-def load_waermebedarf(pfad: str | Path) -> pd.Series:
+def load_waermebedarf(pfad: str | Path | Any) -> pd.Series:
     """Laedt eine stundenscharfe Waermelast-Zeitreihe aus CSV.
 
-    Erwartet die Spalten ``zeitstempel`` und ``waermelast_kwh``.
+    Erwartet die Spalten ``zeitstempel`` und ``waermelast_kwh``. ``pfad`` ist
+    ein Dateipfad oder ein geoeffnetes Dateiobjekt (z. B. GUI-Upload).
     """
-    pfad = Path(pfad)
-    if not pfad.exists():
-        raise FileNotFoundError(f"Waermelastprofil nicht gefunden: {pfad}")
+    if isinstance(pfad, (str, Path)):
+        pfad = Path(pfad)
+        if not pfad.exists():
+            raise FileNotFoundError(f"Waermelastprofil nicht gefunden: {pfad}")
 
     df = pd.read_csv(pfad)
     fehlende = {"zeitstempel", "waermelast_kwh"} - set(df.columns)
     if fehlende:
-        raise ValueError(f"CSV {pfad} fehlen erwartete Spalten: {sorted(fehlende)}")
+        raise ValueError(
+            f"CSV {getattr(pfad, 'name', pfad)} fehlen erwartete Spalten: {sorted(fehlende)}"
+        )
 
     df["zeitstempel"] = pd.to_datetime(df["zeitstempel"])
     df = df.set_index("zeitstempel").sort_index()

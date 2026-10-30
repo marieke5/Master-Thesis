@@ -10,34 +10,95 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 import yaml
 
-BackupTyp = Literal["elektrodenkessel", "gaskessel"]
+BackupTyp = Literal["elektrodenkessel"]  # gaskessel: fuer eine spaetere Version vorgesehen
 Strompreisszenario = Literal["best_case", "realistisch", "worst_case"]
+
+
+Wetterquelle = Literal["open_meteo", "era5", "csv"]
+
+
+@dataclass
+class WindpowerlibConfig:
+    """Parameter fuer die Schnellabschaetzung des Erzeugungsprofils mit
+    windpowerlib (siehe ``windpark.py``). Ersetzt kein Ertragsgutachten."""
+
+    breitengrad: float
+    laengengrad: float
+    jahr: int = 2023  # Wetterjahr
+    anlagentyp: str = "E-141/4200"  # Name aus der windpowerlib-Anlagendatenbank
+    nabenhoehe_m: float = 129.0
+    anzahl_anlagen: int = 1
+    parkwirkungsgrad: float = 0.9  # pauschale Abschattungs-/Parkverluste (0..1)
+    rauigkeitslaenge_m: float = 0.15
+    # era5 (Copernicus CDS) erlaubt nach Lizenz auch kommerzielle Nutzung;
+    # open_meteo ist in der kostenlosen Variante nur nicht-kommerziell nutzbar.
+    wetterquelle: Wetterquelle = "era5"
+    wetter_pfad: Optional[str] = None  # nur bei wetterquelle "csv"
+    wind_messhoehe_m: float = 100.0  # Hoehe der Windgeschwindigkeit in der Wetter-CSV
+    wetter_cache_ordner: Optional[str] = "data/wetter_cache"
 
 
 @dataclass
 class WindparkConfig:
-    """Input des Windparks als Blackbox-Energiequelle."""
+    """Input des Windparks.
 
-    erzeugungsprofil_pfad: str  # CSV, stundenscharf, 8760 Werte
+    ``quelle="csv"``: extern erstelltes Erzeugungsprofil (z. B. Ertragsgutachten),
+    stundenscharf (8760 Werte), Pfad in ``erzeugungsprofil_pfad``.
+    ``quelle="windpowerlib"``: Schnellabschaetzung aus Wetterdaten, siehe
+    ``WindpowerlibConfig``.
+    """
+
+    erzeugungsprofil_pfad: Optional[Any] = None  # CSV-Pfad oder hochgeladene Datei
+    quelle: Literal["csv", "windpowerlib"] = "csv"
+    windpowerlib: Optional[WindpowerlibConfig] = None
+
+
+@dataclass
+class GebaeudetypConfig:
+    """Ein Gebaeudetyp fuer lpagg (VDI 4655 / BDEW), ggf. mit mehreren Kopien."""
+
+    house_type: str  # "EFH", "MFH" oder BDEW-Typ wie "GHD/G1", "GHA/G4"
+    q_heiz_a_kwh: float  # jaehrlicher Heizenergieverbrauch je Gebaeude
+    anzahl: int = 1  # Anzahl identischer Gebaeude ("copies" in lpagg)
+    q_tww_a_kwh: Any = "calculate"  # Trinkwarmwasser je Gebaeude oder "calculate"
+    w_a_kwh: Any = "calculate"  # Strombedarf je Gebaeude oder "calculate" (hier ohne Einfluss)
+    q_kalt_a_kwh: Optional[float] = None  # Kaeltebedarf (nur Gewerbe, hier ohne Einfluss)
+    n_pers: int = 0
+    n_we: int = 0  # Wohneinheiten
+    sigma: int = 0  # Zeitverschiebung der Kopien (Gleichzeitigkeit), in Zeitschritten
+
+
+@dataclass
+class LpaggConfig:
+    """Waermelast aus Gebaeudetypen ueber lpagg (siehe ``lastprofil_lpagg.py``)."""
+
+    gebaeude: dict[str, GebaeudetypConfig]
+    try_region: int = 4  # DWD-Testreferenzjahr 2010, Region 1..15 (4 = Potsdam)
+    jahr: int = 2027
+    sommer_temperaturgrenze_c: float = 12.0
+    wetter_pfad: Optional[str] = None  # eigene DWD-TRY-Datei statt der mitgelieferten
+    feiertage_land: str = "DE"
+    feiertage_bundesland: Optional[str] = "SH"
 
 
 @dataclass
 class WaermebedarfConfig:
     """Input der Waermelast.
 
-    Zwei Wege, siehe waermebedarf.py:
-    1. ``waermelast_pfad``: eine bereits vorliegende stundenscharfe CSV-Zeitreihe.
-    2. ``jahreswaermebedarf_mwh`` (+ optional ``anzahl_gebaeude``): Gesamtwaermebedarf,
-       der ueber eine im Tool hinterlegte Lastverteilung auf Stunden verteilt wird.
-       Diese Lastverteilung ist aktuell ein Platzhalter und soll durch ein
-       Referenzprofil aus der App nPro ersetzt werden, sobald der Export vorliegt.
+    Drei Wege, siehe waermebedarf.py (Prioritaet in dieser Reihenfolge):
+    1. ``waermelast_pfad``: eine bereits vorliegende stundenscharfe CSV-Zeitreihe
+       (Pfad oder hochgeladene Datei).
+    2. ``lpagg``: Gebaeudetypen und -anzahl, Profil ueber lpagg (VDI 4655/BDEW).
+    3. ``jahreswaermebedarf_mwh``: Gesamtwaermebedarf mit einfachem Platzhalter-
+       Muster (saisonal), ohne Gebaeudebezug.
     """
 
-    waermelast_pfad: Optional[str] = None  # CSV, stundenscharf, falls vorhanden
+    waermelast_pfad: Optional[Any] = None  # CSV-Pfad oder hochgeladene Datei
+    lpagg: Optional[LpaggConfig] = None
     jahreswaermebedarf_mwh: Optional[float] = None  # Fallback: Jahreswert + Lastverteilung
     anzahl_gebaeude: Optional[int] = None  # fuer die (noch zu ergaenzende) nPro-Lastverteilung
     lastprofil_typ: Optional[str] = None  # z. B. "VDI4655" (fuer spaetere Erweiterung)
@@ -52,7 +113,7 @@ class WaermepumpeConfig:
 @dataclass
 class BackupConfig:
     typ: BackupTyp
-    wirkungsgrad: float  # z. B. 0.98 fuer Elektrodenkessel, 0.9 fuer Gaskessel
+    wirkungsgrad: float  # z. B. 0.98 fuer Elektrodenkessel
     nennleistung_kw: float
 
 
@@ -89,7 +150,6 @@ class WirtschaftConfig:
     strompreisszenarien: Strompreisszenarien
     netzentgelt_eur_pro_mwh: float
     strompreisszenario_aktiv: Strompreisszenario = "realistisch"
-    gaspreis_eur_pro_mwh: Optional[float] = None
     capex_waermepumpe_eur: float = 0.0
     capex_backup_eur: float = 0.0
     capex_speicher_eur: float = 0.0
@@ -143,10 +203,25 @@ def load_config(pfad: str | Path) -> ToolConfig:
         **wirtschaft_rohdaten.pop("strompreisszenarien")
     )
 
+    windpark_rohdaten = dict(rohdaten["windpark"])
+    if windpark_rohdaten.get("windpowerlib") is not None:
+        windpark_rohdaten["windpowerlib"] = WindpowerlibConfig(
+            **windpark_rohdaten["windpowerlib"]
+        )
+
+    waermebedarf_rohdaten = dict(rohdaten.get("waermebedarf") or {})
+    if waermebedarf_rohdaten.get("lpagg") is not None:
+        lpagg_rohdaten = dict(waermebedarf_rohdaten["lpagg"])
+        lpagg_rohdaten["gebaeude"] = {
+            name: GebaeudetypConfig(**werte)
+            for name, werte in lpagg_rohdaten["gebaeude"].items()
+        }
+        waermebedarf_rohdaten["lpagg"] = LpaggConfig(**lpagg_rohdaten)
+
     return ToolConfig(
         projektname=rohdaten["projektname"],
-        windpark=WindparkConfig(**rohdaten["windpark"]),
-        waermebedarf=WaermebedarfConfig(**rohdaten.get("waermebedarf", {})),
+        windpark=WindparkConfig(**windpark_rohdaten),
+        waermebedarf=WaermebedarfConfig(**waermebedarf_rohdaten),
         waermepumpe=WaermepumpeConfig(**rohdaten["waermepumpe"]),
         backup=BackupConfig(**rohdaten["backup"]),
         speicher=SpeicherConfig(**rohdaten["speicher"]),

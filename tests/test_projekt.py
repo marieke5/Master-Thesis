@@ -28,3 +28,35 @@ def test_berechne_projekt_ohne_waermebedarf_wirft_fehler():
     config.waermebedarf.jahreswaermebedarf_mwh = None
     with pytest.raises(ValueError):
         berechne_projekt(config)
+
+
+def test_berechne_projekt_nutzt_vorgegebene_profile():
+    config = load_config(PARAMETER_CONFIG)
+    # Config-Quellen sind absichtlich unbrauchbar: die vorgegebenen Profile muessen gewinnen.
+    config.windpark.erzeugungsprofil_pfad = "gibt_es_nicht.csv"
+    config.waermebedarf.waermelast_pfad = "gibt_es_nicht.csv"
+    from lcoh_tool.erzeugungsprofil import load_erzeugungsprofil
+    from lcoh_tool.waermebedarf import load_waermebedarf
+
+    basis = load_config(PARAMETER_CONFIG)
+    erzeugung = load_erzeugungsprofil(basis.windpark.erzeugungsprofil_pfad)
+    waermelast = load_waermebedarf(basis.waermebedarf.waermelast_pfad)
+    ergebnis = berechne_projekt(config, erzeugungsprofil=erzeugung, waermelastprofil=waermelast)
+    assert ergebnis.lcoh.lcoh_eur_pro_mwh > 0
+
+
+def test_csv_upload_als_dateiobjekt_wird_akzeptiert():
+    from lcoh_tool.erzeugungsprofil import load_erzeugungsprofil
+
+    config = load_config(PARAMETER_CONFIG)
+    with open(config.windpark.erzeugungsprofil_pfad, "rb") as datei:
+        profil = load_erzeugungsprofil(datei)
+    assert len(profil) > 0
+
+
+def test_windpowerlib_ohne_block_wirft_fehler():
+    config = load_config(PARAMETER_CONFIG)
+    config.windpark.quelle = "windpowerlib"
+    config.windpark.windpowerlib = None
+    with pytest.raises(ValueError, match="windpowerlib"):
+        berechne_projekt(config)

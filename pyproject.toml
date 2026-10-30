@@ -15,10 +15,29 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Erzeugungsprofil per Schnellabschaetzung (windpark.quelle: windpowerlib)
+wind = ["windpowerlib>=0.2.2"]
+# ERA5-Direktabruf aus dem Copernicus CDS (wetterquelle: era5), braucht CDS-Account
+era5 = ["cdsapi", "xarray", "netCDF4"]
+# Waermelast aus Gebaeudetypen (waermebedarf.lpagg); lpagg ist nicht auf PyPI,
+# daher Installation aus dem GitHub-Archiv (fester Stand, kein git noetig)
+lpagg = ["lpagg @ https://github.com/jnettels/lpagg/archive/fc693a2bb4d1941f1120e8959c567d43af22ccbb.zip"]
 dev = ["pytest>=7.4"]
+alle = [
+    "windpowerlib>=0.2.2",
+    "cdsapi",
+    "xarray",
+    "netCDF4",
+    "lpagg @ https://github.com/jnettels/lpagg/archive/fc693a2bb4d1941f1120e8959c567d43af22ccbb.zip",
+    "pytest>=7.4",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+filterwarnings = [
+    "ignore::Warning:lpagg.*",
+    "ignore::Warning:windpowerlib.*",
+]

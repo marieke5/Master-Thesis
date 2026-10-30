@@ -34,29 +34,58 @@ class ProjektErgebnis:
     anteil_direktanschluss_prozent: float
 
 
-def berechne_projekt(config: ToolConfig | str | Path) -> ProjektErgebnis:
+def lade_erzeugung(config: ToolConfig) -> pd.Series:
+    """Erzeugungsprofil je nach ``windpark.quelle`` (CSV oder windpowerlib)."""
+    windpark = config.windpark
+    if windpark.quelle == "windpowerlib":
+        if windpark.windpowerlib is None:
+            raise ValueError("windpark.quelle 'windpowerlib' braucht den Block 'windpowerlib'.")
+        from lcoh_tool.windpark import erzeuge_windprofil
+
+        return erzeuge_windprofil(windpark.windpowerlib)
+    if windpark.erzeugungsprofil_pfad is None:
+        raise ValueError("Kein erzeugungsprofil_pfad (CSV) in der Config gesetzt.")
+    return load_erzeugungsprofil(windpark.erzeugungsprofil_pfad)
+
+
+def lade_waermelast(config: ToolConfig) -> pd.Series:
+    """Waermelast: CSV (Pfad/Upload) vor lpagg vor Jahreswert-Platzhalter."""
+    bedarf = config.waermebedarf
+    if bedarf.waermelast_pfad:
+        return load_waermebedarf(bedarf.waermelast_pfad)
+    if bedarf.lpagg is not None:
+        from lcoh_tool.lastprofil_lpagg import erzeuge_waermelast_lpagg
+
+        return erzeuge_waermelast_lpagg(bedarf.lpagg)
+    if bedarf.jahreswaermebedarf_mwh:
+        parameter = GebaeudeLastparameter(
+            gesamtwaermebedarf_mwh=bedarf.jahreswaermebedarf_mwh,
+            anzahl_gebaeude=bedarf.anzahl_gebaeude or 1,
+        )
+        return lastverteilung_platzhalter(parameter)
+    raise ValueError(
+        "Keine Waermelast-Quelle in der Config: waermelast_pfad, lpagg oder "
+        "jahreswaermebedarf_mwh setzen."
+    )
+
+
+def berechne_projekt(
+    config: ToolConfig | str | Path,
+    erzeugungsprofil: pd.Series | None = None,
+    waermelastprofil: pd.Series | None = None,
+) -> ProjektErgebnis:
     """Fuehrt die komplette Berechnung aus.
 
     ``config`` ist entweder ein bereits gebautes ``ToolConfig`` (z. B. aus
-    einer GUI) oder der Pfad zu einer YAML-Datei.
+    einer GUI) oder der Pfad zu einer YAML-Datei. Mit ``erzeugungsprofil`` /
+    ``waermelastprofil`` lassen sich fertige Zeitreihen direkt vorgeben; dann
+    werden die jeweiligen Quellen der Config uebergangen.
     """
     if not isinstance(config, ToolConfig):
         config = load_config(config)
 
-    erzeugung = load_erzeugungsprofil(config.windpark.erzeugungsprofil_pfad)
-
-    if config.waermebedarf.waermelast_pfad:
-        waermelast = load_waermebedarf(config.waermebedarf.waermelast_pfad)
-    elif config.waermebedarf.jahreswaermebedarf_mwh:
-        parameter = GebaeudeLastparameter(
-            gesamtwaermebedarf_mwh=config.waermebedarf.jahreswaermebedarf_mwh,
-            anzahl_gebaeude=config.waermebedarf.anzahl_gebaeude or 1,
-        )
-        waermelast = lastverteilung_platzhalter(parameter)
-    else:
-        raise ValueError(
-            "Weder waermelast_pfad noch jahreswaermebedarf_mwh in der Config gesetzt."
-        )
+    erzeugung = erzeugungsprofil if erzeugungsprofil is not None else lade_erzeugung(config)
+    waermelast = waermelastprofil if waermelastprofil is not None else lade_waermelast(config)
 
     bilanz = berechne_bilanz(erzeugung, waermelast, config)
     lcoh = berechne_lcoh(bilanz, config)
