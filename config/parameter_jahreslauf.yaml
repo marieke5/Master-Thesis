@@ -1,0 +1,97 @@
+# Jahreslauf mit ERA5-Wetterdaten (windpowerlib) und Waermelast aus Gebaeudetypen (lpagg).
+# Voraussetzungen: pip install -e ".[alle]", CDS-Account (~/.cdsapirc) mit akzeptierter Lizenz.
+# Alle Zahlenwerte sind Platzhalter und noch durch Projektdaten zu ersetzen.
+#
+# Start:  python -m lcoh_tool.main --config config/parameter_jahreslauf.yaml
+
+projektname: "Jahreslauf ERA5 + lpagg (Beispielwerte)"
+
+# Referenzjahr: ein Jahr fuer Wetter und Markt. Gilt fuer ERA5-Wind (windpowerlib), die
+# ERA5-Temperatur der Waermelast (lpagg) und waehlt dieses Jahr aus mehrjaehrigen
+# Wind-/Preis-CSV. Eine WindPRO-CSV sollte genau ein Jahr enthalten.
+referenzjahr: 2023
+
+windpark:
+  quelle: windpowerlib
+  windpowerlib:
+    breitengrad: 53.5          # TODO: echte Koordinaten des Windparks
+    laengengrad: 10.6
+    jahr: 2023                 # Wetterjahr (wird vom referenzjahr ueberschrieben)
+    anlagentyp: "E-141/4200"   # Name aus der windpowerlib-Anlagendatenbank
+    nabenhoehe_m: 129
+    anzahl_anlagen: 3
+    parkwirkungsgrad: 0.9
+    wetterquelle: era5         # era5 | open_meteo (nur nicht-kommerziell) | csv
+
+waermebedarf:
+  # Prioritaet 1: stundenscharfe CSV (waermelast_pfad) -> dann entfaellt alles Folgende.
+  # Ohne CSV: Gesamtjahreswaermebedarf + Gebaeudetypen/-anzahl manuell. lpagg liefert
+  # nur die Lastverteilung; das Profil wird auf den Jahreswert skaliert.
+  jahreswaermebedarf_mwh: 1110
+  lpagg:
+    wetterquelle: era5         # Temperatur des Wetterjahres aus dem CDS (Standort/Jahr wie Windpark)
+    # wetterjahr / breitengrad / laengengrad: optional, sonst die Werte des Windparks
+    jahr: 2027                 # Kalenderjahr der Waermelast (Wochentage/Feiertage)
+    feiertage_bundesland: SH
+    gebaeude:
+      EFH:
+        house_type: EFH
+        q_heiz_a_kwh: 15000    # optional (relative Groesse); ohne Angabe: gleiche Verteilung
+        anzahl: 40
+        n_pers: 3
+        n_we: 1
+        sigma: 4               # Zeitversatz der Kopien (Gleichzeitigkeit)
+      MFH:
+        house_type: MFH
+        q_heiz_a_kwh: 80000
+        anzahl: 5
+        n_pers: 30
+        n_we: 10
+        sigma: 2
+
+waermepumpe:
+  jazl: 3.2
+  nennleistung_kw: 800
+
+backup:
+  typ: "elektrodenkessel"
+  wirkungsgrad: 0.98
+  nennleistung_kw: 1000
+
+speicher:
+  kapazitaet_kwh: 5000
+  verlust_pro_stunde: 0.002
+
+wirtschaft:
+  wacc: 0.05
+  abschreibungsdauer_jahre: 20
+  strompreisszenario_aktiv: "realistisch"
+  strompreisszenarien:
+    best_case_eur_pro_mwh: 70
+    realistisch_eur_pro_mwh: 90
+    worst_case_eur_pro_mwh: 130
+  netzentgelt_eur_pro_mwh: 40
+  capex_waermepumpe_eur: 600000
+  capex_backup_eur: 150000
+  capex_speicher_eur: 200000
+  capex_anschluss_eur: 400000
+  opex_fix_eur_pro_jahr: 30000
+
+regulatorik:
+  netzentgeltbefreiung_direktanschluss: true
+
+fossile_referenz:
+  aktiv: true
+  wirkungsgrad_kessel: 0.9
+  brennstoffpreis_eur_pro_mwh: 70
+  capex_eur: 250000
+
+steuerung:
+  # Preisgesteuerte Direktleitung: nur bei Marktpreis <= Schwelle (negativ/sehr niedrig),
+  # ausser der Speicher ist fast leer und es wird Waerme gebraucht (Notbetrieb).
+  marktpreis_pfad: "data/marktpreise_2023.csv"   # CSV: zeitstempel, preis_eur_mwh (stuendlich)
+  preisschwelle_eur_pro_mwh: 0
+  speicher_untergrenze_stunden: 2     # "fast leer" = 2 Stunden Waermespitzenlast (Vorrang)
+  speicher_untergrenze_anteil: 0.1    # nur wirksam, wenn *_stunden nicht gesetzt ist
+  speicher_start_anteil: 0.5
+  direktstrom_bepreisung: marktpreis  # marktpreis | fest (dann direktstrompreis_eur_pro_mwh)
