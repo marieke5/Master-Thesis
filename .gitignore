@@ -29,3 +29,8 @@ outputs/
 # OS
 .DS_Store
 Thumbs.db
+
+data/wetter_cache/
+variation*.csv
+.venv/
+*.egg-info/
