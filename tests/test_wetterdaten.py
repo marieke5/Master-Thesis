@@ -64,36 +64,42 @@ def test_standard_wetterquelle_ist_era5():
     assert WindpowerlibConfig(breitengrad=53.6, laengengrad=10.6).wetterquelle == "era5"
 
 
-def test_era5_dataset_wird_in_normiertes_format_uebersetzt():
-    xr = pytest.importorskip("xarray")
-    import numpy as np
-
-    zeit = pd.date_range("2023-01-01", periods=3, freq="h")
-    ds = xr.Dataset(
-        {
-            "u10": ("valid_time", np.array([3.0, 0.0, 6.0])),
-            "v10": ("valid_time", np.array([4.0, 0.0, 8.0])),
-            "u100": ("valid_time", np.array([6.0, 0.0, 12.0])),
-            "v100": ("valid_time", np.array([8.0, 0.0, 16.0])),
-            "t2m": ("valid_time", np.array([283.15, 273.15, 293.15])),
-            "sp": ("valid_time", np.array([101300.0, 100000.0, 102000.0])),
-        },
-        coords={"valid_time": zeit, "latitude": 53.6, "longitude": 10.6},
-    )
-    from lcoh_tool.wetterdaten import _era5_dataset_zu_df
-
-    df = _era5_dataset_zu_df(ds)
-    assert df["wind_10m_ms"].tolist() == pytest.approx([5.0, 0.0, 10.0])
-    assert df["wind_100m_ms"].tolist() == pytest.approx([10.0, 0.0, 20.0])
-    assert df["temperatur_c"].tolist() == pytest.approx([10.0, 0.0, 20.0])
-    assert df["druck_hpa"].iloc[0] == pytest.approx(1013.0)
+ERA5_BEISPIEL_CSV = (
+    "valid_time,u100,v100,u10,v10,t2m,sp,latitude,longitude\n"
+    "2023-01-01 00:00:00,11.190704,8.6180725,6.7195435,5.484909,288.70737,100161.13,53.5,10.5\n"
+    "2023-01-01 01:00:00,10.829803,8.948929,6.4891205,5.629593,288.91345,100170.22,53.5,10.5\n"
+)
 
 
-def test_era5_dataset_ohne_bekannte_variablen_wirft_fehler():
-    xr = pytest.importorskip("xarray")
-    import numpy as np
-    from lcoh_tool.wetterdaten import _era5_dataset_zu_df
+def test_era5_csv_wird_in_normiertes_format_uebersetzt(tmp_path):
+    from lcoh_tool.wetterdaten import _era5_csv_zu_df
 
-    ds = xr.Dataset({"x": ("valid_time", np.zeros(2))}, coords={"valid_time": pd.date_range("2023-01-01", periods=2, freq="h")})
-    with pytest.raises(KeyError):
-        _era5_dataset_zu_df(ds)
+    pfad = tmp_path / "era5.csv"
+    pfad.write_text(ERA5_BEISPIEL_CSV)
+    df = _era5_csv_zu_df(pfad)
+    assert list(df.columns) == ["wind_10m_ms", "wind_100m_ms", "temperatur_c", "druck_hpa"]
+    assert df.index[0] == pd.Timestamp("2023-01-01 00:00")
+    assert df["wind_100m_ms"].iloc[0] == pytest.approx((11.190704**2 + 8.6180725**2) ** 0.5)
+    assert df["temperatur_c"].iloc[0] == pytest.approx(288.70737 - 273.15)
+    assert df["druck_hpa"].iloc[0] == pytest.approx(1001.6113)
+
+
+def test_era5_antwort_als_zip_wird_entpackt(tmp_path):
+    import zipfile
+
+    from lcoh_tool.wetterdaten import _era5_antwort_zu_df
+
+    pfad = tmp_path / "antwort"
+    with zipfile.ZipFile(pfad, "w") as archiv:
+        archiv.writestr("reanalysis-era5-single-levels-timeseries-abc.csv", ERA5_BEISPIEL_CSV)
+    df = _era5_antwort_zu_df(pfad)
+    assert len(df) == 2
+
+
+def test_era5_csv_mit_fehlenden_spalten_wirft_fehler(tmp_path):
+    from lcoh_tool.wetterdaten import _era5_csv_zu_df
+
+    pfad = tmp_path / "era5.csv"
+    pfad.write_text("valid_time,u100\n2023-01-01 00:00:00,1.0\n")
+    with pytest.raises(ValueError, match="fehlen Spalten"):
+        _era5_csv_zu_df(pfad)
