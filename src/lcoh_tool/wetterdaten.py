@@ -15,10 +15,9 @@ Quellen:
   (z. B. echte Green-Wind-Projekte) ``era5`` oder eine eigene Wetter-CSV
   nutzen bzw. einen kostenpflichtigen Open-Meteo-Zugang erwerben.
 - ``era5``: (Standard) direkter Abruf aus dem Copernicus Climate Data Store (CDS) per
-  ``cdsapi``. Braucht einen CDS-Account mit API-Key (``~/.cdsapirc``) sowie die
-  Pakete ``cdsapi``, ``xarray`` und ``netCDF4`` (Extra ``era5``). Die Anfrage
-  entspricht dem vom CDS erzeugten Code; das Einlesen der Antwortdatei ist
-  bislang nur mit einer nachgebauten Datei getestet.
+  ``cdsapi``. Braucht einen CDS-Account mit API-Key (``~/.cdsapirc``), akzeptierte
+  Lizenz und das Paket ``cdsapi`` (Extra ``era5``). Anfrage und Antwortformat
+  (ZIP mit CSV) wurden an einem echten Abruf geprueft.
 - ``csv``: eigene Wetterdatei (siehe ``lade_wetter_csv``).
 
 Heruntergeladene Daten werden optional als CSV zwischengespeichert, damit
@@ -132,22 +131,20 @@ def _open_meteo_antwort_zu_df(daten: dict) -> pd.DataFrame:
 def lade_era5(breitengrad: float, laengengrad: float, jahr: int) -> pd.DataFrame:
     """Holt ein Jahr ERA5-Daten fuer einen Punkt aus dem CDS.
 
-    Nutzt den Datensatz ``reanalysis-era5-single-levels-timeseries`` (Punktabfrage,
-    Anfrageformat wie vom CDS-Formular unter "Show API request" erzeugt).
-    HINWEIS: Das Einlesen der zurueckgegebenen NetCDF-Datei ist bislang nur mit
-    einer nachgebauten Datei getestet, nicht mit einer echten CDS-Antwort.
+    Nutzt den Datensatz ``reanalysis-era5-single-levels-timeseries``
+    (Punktabfrage, naechstgelegener Gitterpunkt). Der CDS liefert die Daten als
+    ZIP mit einer CSV (Spalten ``valid_time, u100, v100, u10, v10, t2m, sp,
+    latitude, longitude``); das Format wurde an einem echten Abruf geprueft.
     """
     try:
         import cdsapi
-        import xarray as xr
     except ImportError as fehler:  # pragma: no cover
         raise ImportError(
-            "Fuer wetterquelle 'era5' werden cdsapi, xarray und netCDF4 benoetigt: "
+            "Fuer wetterquelle 'era5' wird cdsapi benoetigt: "
             'pip install -e ".[era5]"'
         ) from fehler
 
     import tempfile
-    import zipfile
 
     anfrage = {
         "variable": [
@@ -160,47 +157,46 @@ def lade_era5(breitengrad: float, laengengrad: float, jahr: int) -> pd.DataFrame
         ],
         "location": {"longitude": laengengrad, "latitude": breitengrad},
         "date": [f"{jahr}-01-01/{jahr}-12-31"],
-        "data_format": "netcdf",
+        "data_format": "csv",
     }
     with tempfile.TemporaryDirectory() as ordner:
-        ziel = Path(ordner) / "era5.nc"
+        ziel = Path(ordner) / "era5_antwort"
         cdsapi.Client().retrieve(
             "reanalysis-era5-single-levels-timeseries", anfrage
         ).download(str(ziel))
-        if zipfile.is_zipfile(ziel):  # manche Antworten kommen gezippt
-            with zipfile.ZipFile(ziel) as archiv:
-                name = next(n for n in archiv.namelist() if n.endswith(".nc"))
-                archiv.extract(name, ordner)
-                ziel = Path(ordner) / name
-        with xr.open_dataset(ziel) as ds:
-            return _era5_dataset_zu_df(ds)
+        return _era5_antwort_zu_df(ziel)
 
 
-def _era5_dataset_zu_df(ds: Any) -> pd.DataFrame:
-    """Uebersetzt ein ERA5-Punkt-Dataset (xarray) ins normierte Wetterformat."""
+def _era5_antwort_zu_df(datei: Path) -> pd.DataFrame:
+    """Liest die CDS-Antwort (ZIP mit CSV oder direkt eine CSV)."""
+    import tempfile
+    import zipfile
 
-    def variable(*kandidaten: str) -> np.ndarray:
-        for name in kandidaten:
-            if name in ds:
-                werte = np.asarray(ds[name].squeeze(drop=True).values, dtype=float)
-                if werte.ndim != 1:
-                    raise ValueError(f"ERA5-Variable {name} ist nicht eindimensional.")
-                return werte
-        raise KeyError(f"ERA5-Datei enthaelt keine der Variablen {kandidaten}: {list(ds.data_vars)}")
+    if zipfile.is_zipfile(datei):
+        with zipfile.ZipFile(datei) as archiv:
+            csv_namen = [n for n in archiv.namelist() if n.lower().endswith(".csv")]
+            if not csv_namen:
+                raise ValueError(f"ERA5-ZIP enthaelt keine CSV: {archiv.namelist()}")
+            with tempfile.TemporaryDirectory() as ordner:
+                archiv.extract(csv_namen[0], ordner)
+                return _era5_csv_zu_df(Path(ordner) / csv_namen[0])
+    return _era5_csv_zu_df(datei)
 
-    zeit = next((z for z in ("valid_time", "time") if z in ds.coords), None)
-    if zeit is None:
-        raise KeyError(f"ERA5-Datei hat keine Zeitachse: {list(ds.coords)}")
-    index = pd.DatetimeIndex(ds[zeit].values, name="zeitstempel")
 
+def _era5_csv_zu_df(pfad: Path) -> pd.DataFrame:
+    """Uebersetzt die ERA5-CSV ins normierte Wetterformat (UTC, m/s, Grad C, hPa)."""
+    df = pd.read_csv(pfad, parse_dates=["valid_time"])
+    fehlende = {"valid_time", "u100", "v100", "u10", "v10", "t2m", "sp"} - set(df.columns)
+    if fehlende:
+        raise ValueError(f"ERA5-CSV fehlen Spalten: {sorted(fehlende)}")
     return pd.DataFrame(
         {
-            "wind_10m_ms": np.hypot(variable("u10", "10u"), variable("v10", "10v")),
-            "wind_100m_ms": np.hypot(variable("u100", "100u"), variable("v100", "100v")),
-            "temperatur_c": variable("t2m", "2t") - 273.15,
-            "druck_hpa": variable("sp") / 100.0,
+            "wind_10m_ms": np.hypot(df["u10"], df["v10"]).to_numpy(),
+            "wind_100m_ms": np.hypot(df["u100"], df["v100"]).to_numpy(),
+            "temperatur_c": (df["t2m"] - 273.15).to_numpy(),
+            "druck_hpa": (df["sp"] / 100.0).to_numpy(),
         },
-        index=index,
+        index=pd.DatetimeIndex(df["valid_time"], name="zeitstempel"),
     )
 
 

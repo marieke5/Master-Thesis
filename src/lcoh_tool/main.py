@@ -45,6 +45,27 @@ def zeige_ergebnis(ergebnis: ProjektErgebnis) -> None:
         f"{ergebnis.anteil_direktanschluss_prozent:.1f} %"
     )
 
+    k = ergebnis.kennzahlen
+    print("Kennzahlen zur Plausibilitaet:")
+    print(f"  Windstrom: {k.erzeugung_mwh:,.0f} MWh/a, Spitze {k.erzeugung_spitze_kw:,.0f} kW, "
+          f"{k.erzeugung_volllaststunden:,.0f} Volllaststunden")
+    print(f"  Waermebedarf: {k.waermebedarf_mwh:,.0f} MWh/a, Spitzenlast {k.waermelast_spitze_kw:,.0f} kW")
+    print(f"  Strombedarf Waermepumpe: {k.strombedarf_wp_mwh:,.0f} MWh/a, "
+          f"Spitze {k.strombedarf_wp_spitze_kw:,.0f} kW")
+    print(f"  Rueckfallstrom: {k.rueckfall_mwh:,.1f} MWh/a in {k.rueckfall_stunden} Stunden")
+    if ergebnis.config.steuerung is not None:
+        st = ergebnis.config.steuerung
+        print(f"Preisgesteuerte Direktleitung (Schwelle {st.preisschwelle_eur_pro_mwh:g} EUR/MWh):")
+        print(f"  Direktleitung aktiv: {k.direktleitung_stunden} h, davon Notbetrieb "
+              f"{k.notbetrieb_stunden} h; Stunden mit negativem Preis im Jahr: "
+              f"{k.stunden_preis_negativ} h")
+        print(f"  Direktstrom: {k.direktstrom_mwh:,.0f} MWh, Kosten {k.direktstrom_kosten_eur:,.0f} EUR "
+              f"(Durchschnitt {k.direktstrom_durchschnittspreis_eur_mwh:.1f} EUR/MWh)")
+        if k.deckungsluecke_mwh > 0:
+            print(f"  Ungedeckte Waerme: {k.deckungsluecke_mwh:,.1f} MWh")
+    for hinweis in k.hinweise:
+        print(f"  Hinweis: {hinweis}")
+
 
 def run(config_pfad: str) -> ProjektErgebnis:
     ergebnis = berechne_projekt(config_pfad)

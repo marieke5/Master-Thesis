@@ -33,6 +33,7 @@ class LCOHErgebnis:
     jahreskosten_betrieb_eur: float  # fuer das aktive Szenario
     jaehrliche_waermemenge_mwh: float
     lcoh_fossile_referenz_eur_pro_mwh: float | None = None
+    direktstrom_kosten_eur: float = 0.0  # Direktstrom zum Marktpreis (nur mit Steuerung)
 
 
 def berechne_lcoh(bilanz: pd.DataFrame, config: ToolConfig) -> LCOHErgebnis:
@@ -59,6 +60,14 @@ def berechne_lcoh(bilanz: pd.DataFrame, config: ToolConfig) -> LCOHErgebnis:
     rueckfall_kwh = bilanz["rueckfall_kwh"].sum()
     jaehrliche_waermemenge_mwh = bilanz["waermelast_kwh"].sum() / 1000
 
+    # Direktstrom: nur bei preisgesteuertem Betrieb mit Kosten belegt (Marktpreis der
+    # Stunde, negativ = Erloes); sonst kostenlos.
+    direktstrom_kosten = (
+        float(bilanz["direktstrom_kosten_eur"].sum())
+        if "direktstrom_kosten_eur" in bilanz
+        else 0.0
+    )
+
     lcoh_je_szenario: dict[str, float] = {}
     jahreskosten_betrieb_je_szenario: dict[str, float] = {}
     for szenario in ("best_case", "realistisch", "worst_case"):
@@ -66,7 +75,9 @@ def berechne_lcoh(bilanz: pd.DataFrame, config: ToolConfig) -> LCOHErgebnis:
         kosten_rueckfallstrom = rueckfall_kwh / 1000 * (
             strompreis + wirtschaft.netzentgelt_eur_pro_mwh
         )
-        jahreskosten_betrieb = wirtschaft.opex_fix_eur_pro_jahr + kosten_rueckfallstrom
+        jahreskosten_betrieb = (
+            wirtschaft.opex_fix_eur_pro_jahr + kosten_rueckfallstrom + direktstrom_kosten
+        )
         jahreskosten_betrieb_je_szenario[szenario] = jahreskosten_betrieb
         lcoh_je_szenario[szenario] = (
             jahreskosten_kapital + jahreskosten_betrieb
@@ -87,6 +98,7 @@ def berechne_lcoh(bilanz: pd.DataFrame, config: ToolConfig) -> LCOHErgebnis:
         jahreskosten_betrieb_eur=jahreskosten_betrieb_je_szenario[szenario_aktiv],
         jaehrliche_waermemenge_mwh=jaehrliche_waermemenge_mwh,
         lcoh_fossile_referenz_eur_pro_mwh=lcoh_referenz,
+        direktstrom_kosten_eur=direktstrom_kosten,
     )
 
 

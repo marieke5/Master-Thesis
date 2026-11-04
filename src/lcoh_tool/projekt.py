@@ -13,15 +13,42 @@ from pathlib import Path
 
 import pandas as pd
 
+from lcoh_tool.betrieb import berechne_bilanz_preisgesteuert
 from lcoh_tool.bilanz import berechne_bilanz
 from lcoh_tool.config import ToolConfig, load_config
 from lcoh_tool.erzeugungsprofil import load_erzeugungsprofil
+from lcoh_tool.marktpreise import load_marktpreise
 from lcoh_tool.waermebedarf import (
     GebaeudeLastparameter,
     lastverteilung_platzhalter,
     load_waermebedarf,
 )
 from lcoh_tool.wirtschaftlichkeit import LCOHErgebnis, berechne_lcoh
+
+
+@dataclass
+class Kennzahlen:
+    """Kennzahlen zur Plausibilitaetspruefung eines Laufs (Stundenwerte = kW)."""
+
+    erzeugung_mwh: float
+    erzeugung_spitze_kw: float
+    erzeugung_volllaststunden: float  # bezogen auf die Spitzenleistung im Profil
+    waermebedarf_mwh: float
+    waermelast_spitze_kw: float
+    strombedarf_wp_mwh: float
+    strombedarf_wp_spitze_kw: float
+    rueckfall_mwh: float
+    rueckfall_stunden: int
+    erzeugung_zu_strombedarf: float  # Faktor Erzeugung / Strombedarf WP
+    hinweise: list[str]
+    # Nur bei preisgesteuertem Betrieb (Block 'steuerung') belegt:
+    direktleitung_stunden: int = 0
+    notbetrieb_stunden: int = 0
+    stunden_preis_negativ: int = 0
+    direktstrom_mwh: float = 0.0
+    direktstrom_kosten_eur: float = 0.0
+    direktstrom_durchschnittspreis_eur_mwh: float = 0.0  # mengengewichtet
+    deckungsluecke_mwh: float = 0.0
 
 
 @dataclass
@@ -32,6 +59,135 @@ class ProjektErgebnis:
     bilanz: pd.DataFrame
     lcoh: LCOHErgebnis
     anteil_direktanschluss_prozent: float
+    kennzahlen: Kennzahlen
+
+
+def berechne_kennzahlen(bilanz: pd.DataFrame, config: ToolConfig) -> Kennzahlen:
+    """Kennzahlen und Hinweise, mit denen sich ein Lauf auf Plausibilitaet pruefen laesst."""
+    erzeugung = bilanz["erzeugung_kwh"]
+    strombedarf = bilanz["strombedarf_wp_kwh"]
+    waermelast = bilanz["waermelast_kwh"]
+    rueckfall = bilanz["rueckfall_kwh"]
+
+    erzeugung_mwh = erzeugung.sum() / 1000
+    spitze = float(erzeugung.max())
+    strombedarf_mwh = strombedarf.sum() / 1000
+    rueckfall_stunden = int((rueckfall > 1e-9).sum())
+    faktor = erzeugung_mwh / strombedarf_mwh if strombedarf_mwh > 0 else float("inf")
+
+    hinweise: list[str] = []
+    if faktor > 20:
+        hinweise.append(
+            f"Die Windenergie ueberschreitet den Strombedarf der Waermepumpe um das "
+            f"{faktor:.0f}-fache - der Windpark ist fuer dieses Waermenetz sehr gross. "
+            "Sinnvoll waere ein zugeordneter Leistungsanteil des Parks."
+        )
+    gesteuert = config.steuerung is not None and "direktleitung_aktiv" in bilanz
+    if rueckfall_stunden == 0 and not gesteuert:
+        hinweise.append(
+            "Kein Rueckfallstrom: Die LCOH haengt damit nicht von den Strompreisszenarien ab "
+            "(Direktstrom kostet im Modell derzeit nichts)."
+        )
+    installiert_kw = config.waermepumpe.nennleistung_kw + config.backup.nennleistung_kw
+    if not gesteuert and waermelast.max() > installiert_kw:
+        hinweise.append(
+            f"Die Waermespitzenlast ({waermelast.max():.0f} kW) liegt ueber den installierten "
+            f"Leistungen von Waermepumpe + Backup ({installiert_kw:.0f} kW); Leistungsgrenzen "
+            "werden in der Bilanz noch nicht angewendet."
+        )
+
+    extra: dict = {}
+    if gesteuert:
+        direkt_mwh = float(bilanz["direktanschluss_kwh"].sum() / 1000)
+        kosten = float(bilanz["direktstrom_kosten_eur"].sum())
+        luecke_mwh = float(bilanz["deckungsluecke_kwh"].sum() / 1000)
+        extra = dict(
+            direktleitung_stunden=int(bilanz["direktleitung_aktiv"].sum()),
+            notbetrieb_stunden=int(bilanz["notbetrieb"].sum()),
+            stunden_preis_negativ=int((bilanz["marktpreis_eur_mwh"] < 0).sum()),
+            direktstrom_mwh=direkt_mwh,
+            direktstrom_kosten_eur=kosten,
+            direktstrom_durchschnittspreis_eur_mwh=kosten / direkt_mwh if direkt_mwh > 0 else 0.0,
+            deckungsluecke_mwh=luecke_mwh,
+        )
+        if luecke_mwh > 0:
+            hinweise.append(
+                f"{luecke_mwh:,.0f} MWh Waerme bleiben ungedeckt: Leistung von Waermepumpe + "
+                "Backup bzw. Speicher reichen zeitweise nicht aus."
+            )
+        if bilanz["direktleitung_aktiv"].sum() == 0:
+            hinweise.append(
+                "Die Direktleitung wurde nie genutzt: Preisschwelle oder Preisreihe pruefen."
+            )
+
+    return Kennzahlen(
+        erzeugung_mwh=float(erzeugung_mwh),
+        erzeugung_spitze_kw=spitze,
+        erzeugung_volllaststunden=float(erzeugung.sum() / spitze) if spitze > 0 else 0.0,
+        waermebedarf_mwh=float(waermelast.sum() / 1000),
+        waermelast_spitze_kw=float(waermelast.max()),
+        strombedarf_wp_mwh=float(strombedarf_mwh),
+        strombedarf_wp_spitze_kw=float(strombedarf.max()),
+        rueckfall_mwh=float(rueckfall.sum() / 1000),
+        rueckfall_stunden=rueckfall_stunden,
+        erzeugung_zu_strombedarf=float(faktor),
+        hinweise=hinweise,
+        **extra,
+    )
+
+
+def gleiche_jahr_an(profil: pd.Series, ziel: pd.Series) -> pd.Series:
+    """Verschiebt ein Ein-Jahres-Profil auf das Kalenderjahr von ``ziel``.
+
+    Die Bilanz gleicht Profile ueber ihre Zeitstempel ab. Haben Erzeugung (z. B.
+    Wetterjahr 2023) und Waermelast (z. B. Jahr 2027) verschiedene Jahre, gaebe
+    es keine Ueberschneidung. Daher wird das Profil auf das Jahr der Waermelast
+    gelegt (gleicher Tag und gleiche Stunde). Ein 29. Februar entfaellt dabei,
+    wenn das Zieljahr kein Schaltjahr ist.
+    """
+    jahre_profil = profil.index.year.unique()
+    jahre_ziel = ziel.index.year.unique()
+    if len(jahre_profil) != 1 or len(jahre_ziel) != 1 or jahre_profil[0] == jahre_ziel[0]:
+        return profil
+    verschoben = profil.copy()
+    verschoben.index = profil.index + pd.DateOffset(years=int(jahre_ziel[0] - jahre_profil[0]))
+    return verschoben[~verschoben.index.duplicated(keep="first")]
+
+
+def waehle_jahr(profil: pd.Series, jahr: int | None, name: str) -> pd.Series:
+    """Stellt sicher, dass ein Profil genau ein Jahr enthaelt.
+
+    Enthaelt es mehrere Jahre, wird ``jahr`` (Referenzjahr) ausgewaehlt; ohne Referenzjahr
+    gibt es einen Fehler, damit nicht still mit einem falschen Zeitraum gerechnet wird.
+    Ein Profil mit nur einem Jahr bleibt unveraendert (egal, welches Jahr es ist).
+    """
+    jahre = sorted(profil.index.year.unique())
+    if len(jahre) <= 1:
+        return profil
+    if jahr is None:
+        raise ValueError(
+            f"{name} enthaelt mehrere Jahre {jahre}: bitte ein 'referenzjahr' in der Config setzen."
+        )
+    if jahr not in jahre:
+        raise ValueError(f"{name} enthaelt das Referenzjahr {jahr} nicht (vorhanden: {jahre}).")
+    return profil[profil.index.year == jahr]
+
+
+def wende_referenzjahr_an(config: ToolConfig) -> ToolConfig:
+    """Uebertraegt das Referenzjahr auf Windpark-Wetter (windpowerlib) und lpagg-Wetterjahr.
+
+    Gibt eine Kopie zurueck; ohne Referenzjahr bleibt die Config unveraendert.
+    """
+    if config.referenzjahr is None:
+        return config
+    import copy
+
+    cfg = copy.deepcopy(config)
+    if cfg.windpark.windpowerlib is not None:
+        cfg.windpark.windpowerlib.jahr = cfg.referenzjahr
+    if cfg.waermebedarf.lpagg is not None and cfg.waermebedarf.lpagg.wetterjahr is None:
+        cfg.waermebedarf.lpagg.wetterjahr = cfg.referenzjahr
+    return cfg
 
 
 def lade_erzeugung(config: ToolConfig) -> pd.Series:
@@ -56,7 +212,15 @@ def lade_waermelast(config: ToolConfig) -> pd.Series:
     if bedarf.lpagg is not None:
         from lcoh_tool.lastprofil_lpagg import erzeuge_waermelast_lpagg
 
-        return erzeuge_waermelast_lpagg(bedarf.lpagg)
+        standort = None
+        wp = config.windpark.windpowerlib
+        if wp is not None:
+            standort = (wp.breitengrad, wp.laengengrad, wp.jahr)
+        return erzeuge_waermelast_lpagg(
+            bedarf.lpagg,
+            jahreswaermebedarf_mwh=bedarf.jahreswaermebedarf_mwh,
+            wetter_standort=standort,
+        )
     if bedarf.jahreswaermebedarf_mwh:
         parameter = GebaeudeLastparameter(
             gesamtwaermebedarf_mwh=bedarf.jahreswaermebedarf_mwh,
@@ -73,21 +237,38 @@ def berechne_projekt(
     config: ToolConfig | str | Path,
     erzeugungsprofil: pd.Series | None = None,
     waermelastprofil: pd.Series | None = None,
+    marktpreisprofil: pd.Series | None = None,
 ) -> ProjektErgebnis:
     """Fuehrt die komplette Berechnung aus.
 
     ``config`` ist entweder ein bereits gebautes ``ToolConfig`` (z. B. aus
     einer GUI) oder der Pfad zu einer YAML-Datei. Mit ``erzeugungsprofil`` /
     ``waermelastprofil`` lassen sich fertige Zeitreihen direkt vorgeben; dann
-    werden die jeweiligen Quellen der Config uebergangen.
+    werden die jeweiligen Quellen der Config uebergangen. Ist in der Config ein
+    Block ``steuerung`` gesetzt, laeuft die preisgesteuerte Betriebsweise
+    (``betrieb.py``) mit den Marktpreisen aus ``marktpreisprofil`` bzw. der CSV.
     """
     if not isinstance(config, ToolConfig):
         config = load_config(config)
+    config = wende_referenzjahr_an(config)
 
     erzeugung = erzeugungsprofil if erzeugungsprofil is not None else lade_erzeugung(config)
     waermelast = waermelastprofil if waermelastprofil is not None else lade_waermelast(config)
+    erzeugung = waehle_jahr(erzeugung, config.referenzjahr, "Erzeugungsprofil")
+    waermelast = waehle_jahr(waermelast, None, "Waermelastprofil")
+    erzeugung = gleiche_jahr_an(erzeugung, waermelast)
 
-    bilanz = berechne_bilanz(erzeugung, waermelast, config)
+    if config.steuerung is not None:
+        marktpreis = (
+            marktpreisprofil
+            if marktpreisprofil is not None
+            else load_marktpreise(config.steuerung.marktpreis_pfad)
+        )
+        marktpreis = waehle_jahr(marktpreis, config.referenzjahr, "Marktpreisreihe")
+        marktpreis = gleiche_jahr_an(marktpreis, waermelast)
+        bilanz = berechne_bilanz_preisgesteuert(erzeugung, waermelast, marktpreis, config)
+    else:
+        bilanz = berechne_bilanz(erzeugung, waermelast, config)
     lcoh = berechne_lcoh(bilanz, config)
 
     direkt = bilanz["direktanschluss_kwh"].sum()
@@ -101,4 +282,5 @@ def berechne_projekt(
         bilanz=bilanz,
         lcoh=lcoh,
         anteil_direktanschluss_prozent=anteil,
+        kennzahlen=berechne_kennzahlen(bilanz, config),
     )

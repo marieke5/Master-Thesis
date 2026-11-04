@@ -42,6 +42,54 @@ Anwendungsfall: Windpark- und Nahwärmeprojekt in Siebeneichen (Amt Büchen).
 - **Explizit außerhalb des Scopes:** Umbau/Erweiterung des Nahwärmenetzes
   selbst sowie die Modellierung der Windenergieerzeugung.
 
+## Referenzjahr
+
+`referenzjahr` (oberste Ebene der YAML) legt ein Wetter-/Marktjahr für alles fest: ERA5-Wind
+(windpowerlib), ERA5-Temperatur für lpagg und die Auswahl aus mehrjährigen Wind-/Preis-CSV.
+Eine WindPRO-CSV sollte genau ein Jahr enthalten; enthält ein Profil mehrere Jahre und ist kein
+Referenzjahr gesetzt, bricht das Tool mit einer Fehlermeldung ab. Die Marktpreise holst du für
+dasselbe Jahr (`marktpreise_abruf --jahr <Referenzjahr>`).
+
+## Wärmelast mit lpagg (nur Lastverteilung)
+
+Priorität 1 ist die hochgeladene Wärmelast-CSV (`waermelast_pfad`). Ohne CSV werden
+`jahreswaermebedarf_mwh` und die Gebäudetypen/-anzahl (`lpagg.gebaeude`) manuell
+angegeben. lpagg liefert dann **nur die Verteilung** (VDI 4655 / BDEW, Feiertage,
+Gleichzeitigkeit); das Profil wird auf den Jahreswert skaliert. `q_heiz_a_kwh` je
+Gebäudetyp ist optional (relative Größe); ohne Angabe wird gleichmäßig verteilt.
+
+Wetter für die Lastverteilung: `lpagg.wetterquelle: era5` holt die Temperatur des
+Wetterjahres aus dem Copernicus CDS (Standort und Jahr des Windparks, oder eigene
+`breitengrad`/`laengengrad`/`wetterjahr`; gleicher Cache wie beim Wind). `try` nutzt
+das mitgelieferte DWD-Testreferenzjahr.
+
+## Preisgesteuerte Direktleitung
+
+Mit dem optionalen Block `steuerung` in der YAML-Config (Beispiel:
+`config/parameter_steuerung.yaml`) wird die Direktleitung nur bei negativen oder
+sehr niedrigen Marktpreisen genutzt (`betrieb.py`):
+
+- **Preis <= `preisschwelle_eur_pro_mwh`** (Standard 0): Direktleitung aktiv, Wärme
+  deckt den Bedarf und lädt den Speicher.
+- **Preis darüber:** der Speicher deckt den Bedarf. **Ausnahme Notbetrieb:** Ist der
+  Speicher fast leer (`speicher_untergrenze_anteil`, Standard 10 %) und wird Wärme
+  gebraucht, läuft die Direktleitung trotzdem und deckt den aktuellen Bedarf. „Fast leer“
+  lässt sich alternativ als Stunden der Wärmespitzenlast angeben
+  (`speicher_untergrenze_stunden`, hat Vorrang), unabhängig von der Speichergröße.
+- Reihenfolge der Bedarfsdeckung: Direktstrom -> Speicher -> Netzbezug (Rückfallstrom
+  mit Netzentgelt). Wärmepumpe vor Elektrodenkessel.
+- Direktstrom wird zum **Marktpreis der Stunde** bewertet (Opportunitätskosten;
+  negativer Preis = Erlös). Alternativ `direktstrom_bepreisung: fest`.
+- Marktpreise: eigene CSV (`zeitstempel`, `preis_eur_mwh`, stündlich, z. B. SMARD),
+  Jahr wird wie bei den Profilen auf das Jahr der Wärmelast gelegt.
+  `data/marktpreise_beispiel_jahr.csv` ist ein **synthetischer Platzhalter**
+  (nicht korreliert mit dem Wind), `marktpreise_beispiel.csv` hat 48 Stunden.
+
+Annahmen: Speicherkapazität und `nennleistung_kw` von Wärmepumpe/Backup gelten in
+dieser Betriebsweise als **thermisch**; Leistungsgrenzen werden angewendet (nicht
+gedeckte Wärme erscheint als Deckungslücke). Ohne Block `steuerung` bleibt das
+bisherige Verhalten (Direktstrom kostenlos) unverändert.
+
 ## Projektstruktur
 
 ```

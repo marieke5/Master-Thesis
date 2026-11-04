@@ -62,7 +62,9 @@ class GebaeudetypConfig:
     """Ein Gebaeudetyp fuer lpagg (VDI 4655 / BDEW), ggf. mit mehreren Kopien."""
 
     house_type: str  # "EFH", "MFH" oder BDEW-Typ wie "GHD/G1", "GHA/G4"
-    q_heiz_a_kwh: float  # jaehrlicher Heizenergieverbrauch je Gebaeude
+    # Jaehrlicher Heizenergieverbrauch je Gebaeude. Optional: Ohne Angabe wird der
+    # Gesamtwaermebedarf gleichmaessig auf alle Gebaeude verteilt.
+    q_heiz_a_kwh: Optional[float] = None
     anzahl: int = 1  # Anzahl identischer Gebaeude ("copies" in lpagg)
     q_tww_a_kwh: Any = "calculate"  # Trinkwarmwasser je Gebaeude oder "calculate"
     w_a_kwh: Any = "calculate"  # Strombedarf je Gebaeude oder "calculate" (hier ohne Einfluss)
@@ -77,6 +79,14 @@ class LpaggConfig:
     """Waermelast aus Gebaeudetypen ueber lpagg (siehe ``lastprofil_lpagg.py``)."""
 
     gebaeude: dict[str, GebaeudetypConfig]
+    # Wetter fuer die Lastverteilung: "era5" = Temperatur des Wetterjahres aus dem CDS
+    # (gleicher Standort/Jahr wie der Windpark, falls nicht eigens angegeben),
+    # "try" = mitgeliefertes DWD-Testreferenzjahr (try_region).
+    wetterquelle: Literal["try", "era5"] = "try"
+    wetterjahr: Optional[int] = None  # nur era5; Standard: Jahr des Windparks
+    breitengrad: Optional[float] = None  # nur era5; Standard: Standort des Windparks
+    laengengrad: Optional[float] = None
+    wetter_cache_ordner: Optional[str] = "data/wetter_cache"
     try_region: int = 4  # DWD-Testreferenzjahr 2010, Region 1..15 (4 = Potsdam)
     jahr: int = 2027
     sommer_temperaturgrenze_c: float = 12.0
@@ -92,7 +102,9 @@ class WaermebedarfConfig:
     Drei Wege, siehe waermebedarf.py (Prioritaet in dieser Reihenfolge):
     1. ``waermelast_pfad``: eine bereits vorliegende stundenscharfe CSV-Zeitreihe
        (Pfad oder hochgeladene Datei).
-    2. ``lpagg``: Gebaeudetypen und -anzahl, Profil ueber lpagg (VDI 4655/BDEW).
+    2. ``lpagg``: Gebaeudetypen und -anzahl; lpagg liefert nur die Lastverteilung
+       (VDI 4655/BDEW). Ist ``jahreswaermebedarf_mwh`` gesetzt, wird das Profil
+       auf diesen Jahreswert skaliert.
     3. ``jahreswaermebedarf_mwh``: Gesamtwaermebedarf mit einfachem Platzhalter-
        Muster (saisonal), ohne Gebaeudebezug.
     """
@@ -173,6 +185,32 @@ class FossileReferenzConfig:
 
 
 @dataclass
+class SteuerungConfig:
+    """Preisgesteuerte Betriebsweise der Direktleitung (siehe ``betrieb.py``).
+
+    Die Direktleitung wird nur genutzt, wenn der Marktpreis der Stunde
+    (Day-Ahead) bei oder unter ``preisschwelle_eur_pro_mwh`` liegt (negativ
+    oder sehr niedrig). Dann wird Waerme erzeugt, der Waermebedarf gedeckt und
+    der Waermespeicher geladen. Bei hohen Preisen deckt der Speicher den Bedarf.
+    Faellt der Speicherstand auf ``speicher_untergrenze_anteil`` der Kapazitaet
+    (fast leer), wird bei Waermebedarf trotzdem erzeugt (Notbetrieb).
+    ``speicher.kapazitaet_kwh`` gilt in dieser Betriebsweise als thermische
+    Kapazitaet (kWh Waerme), ``waermepumpe``/``backup.nennleistung_kw`` als
+    thermische Leistung.
+    """
+
+    marktpreis_pfad: Any  # CSV (zeitstempel, preis_eur_mwh) oder hochgeladene Datei
+    preisschwelle_eur_pro_mwh: float = 0.0
+    speicher_untergrenze_anteil: float = 0.1
+    # Alternative zum Anteil: "fast leer" als Stunden der Waermespitzenlast (unabhaengig von
+    # der Speichergroesse). Hat Vorrang vor speicher_untergrenze_anteil, wenn gesetzt.
+    speicher_untergrenze_stunden: Optional[float] = None
+    speicher_start_anteil: float = 0.5  # Fuellstand zu Jahresbeginn
+    direktstrom_bepreisung: Literal["marktpreis", "fest"] = "marktpreis"
+    direktstrompreis_eur_pro_mwh: Optional[float] = None  # nur bei bepreisung "fest"
+
+
+@dataclass
 class ToolConfig:
     projektname: str
     windpark: WindparkConfig
@@ -183,6 +221,10 @@ class ToolConfig:
     wirtschaft: WirtschaftConfig
     regulatorik: RegulatorikConfig = field(default_factory=RegulatorikConfig)
     fossile_referenz: FossileReferenzConfig = field(default_factory=FossileReferenzConfig)
+    steuerung: Optional[SteuerungConfig] = None
+    # Referenzjahr: ein Wetter-/Marktjahr fuer alles (Wind per windpowerlib, ERA5-Temperatur
+    # fuer lpagg, Auswahl aus mehrjaehrigen Wind-/Preis-CSV). Siehe projekt.py.
+    referenzjahr: Optional[int] = None
 
 
 def load_config(pfad: str | Path) -> ToolConfig:
@@ -230,4 +272,10 @@ def load_config(pfad: str | Path) -> ToolConfig:
         ),
         regulatorik=RegulatorikConfig(**rohdaten.get("regulatorik", {})),
         fossile_referenz=FossileReferenzConfig(**rohdaten.get("fossile_referenz", {})),
+        steuerung=(
+            SteuerungConfig(**rohdaten["steuerung"])
+            if rohdaten.get("steuerung")
+            else None
+        ),
+        referenzjahr=rohdaten.get("referenzjahr"),
     )
