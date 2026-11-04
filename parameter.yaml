@@ -1,0 +1,52 @@
+# Beispiel-Parameter fuer das LCOH-Tool.
+# Alle Zahlenwerte sind Platzhalter und noch mit Green Wind / der Betreuung
+# abzustimmen.
+
+projektname: "Direktanschluss Windpark an Waermeerzeuger (Parameterbeispiel)"
+
+windpark:
+  erzeugungsprofil_pfad: "data/erzeugungsprofil_beispiel.csv"
+
+waermebedarf:
+  waermelast_pfad: "data/waermelast_beispiel.csv"
+  # Alternative ohne stundenscharfes Profil (Platzhalter-Lastverteilung,
+  # siehe waermebedarf.lastverteilung_platzhalter):
+  # jahreswaermebedarf_mwh: 3500
+  # anzahl_gebaeude: 12
+
+waermepumpe:
+  jazl: 3.2            # Jahresarbeitszahl
+  nennleistung_kw: 800
+
+backup:
+  typ: "elektrodenkessel"
+  wirkungsgrad: 0.98
+  nennleistung_kw: 1000
+
+speicher:
+  kapazitaet_kwh: 5000
+  verlust_pro_stunde: 0.002
+
+wirtschaft:
+  wacc: 0.05
+  abschreibungsdauer_jahre: 20
+  strompreisszenario_aktiv: "realistisch"  # best_case | realistisch | worst_case
+  strompreisszenarien:
+    best_case_eur_pro_mwh: 70
+    realistisch_eur_pro_mwh: 90
+    worst_case_eur_pro_mwh: 130
+  netzentgelt_eur_pro_mwh: 40
+  capex_waermepumpe_eur: 600000
+  capex_backup_eur: 150000
+  capex_speicher_eur: 200000
+  capex_anschluss_eur: 400000
+  opex_fix_eur_pro_jahr: 30000
+
+regulatorik:
+  netzentgeltbefreiung_direktanschluss: true
+
+fossile_referenz:
+  aktiv: true
+  wirkungsgrad_kessel: 0.9
+  brennstoffpreis_eur_pro_mwh: 70
+  capex_eur: 250000

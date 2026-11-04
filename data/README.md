@@ -19,3 +19,10 @@ sich):
 |---|---|
 | `zeitstempel` | Datum/Uhrzeit, stündliche Auflösung |
 | `energie_kwh` / `waermelast_kwh` | Energiemenge der jeweiligen Stunde in kWh |
+
+## Marktpreise
+
+`marktpreise_beispiel.csv` (48 Stunden) und `marktpreise_beispiel_jahr.csv`
+(8.760 Stunden, **synthetisch**, nur zum Testen) haben die Spalten `zeitstempel`
+und `preis_eur_mwh` (stündlich, negative Werte erlaubt). Für echte Analysen die
+Day-Ahead-Preise des Wetterjahres verwenden (z. B. SMARD).
