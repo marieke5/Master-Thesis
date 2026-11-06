@@ -34,6 +34,8 @@ class LCOHErgebnis:
     jaehrliche_waermemenge_mwh: float
     lcoh_fossile_referenz_eur_pro_mwh: float | None = None
     direktstrom_kosten_eur: float = 0.0  # Direktstrom zum Marktpreis (nur mit Steuerung)
+    netzbezug_spitze_kw: float = 0.0  # Jahreshoechstlast des Netzbezugs (Rueckfallstrom)
+    leistungspreis_kosten_eur: float = 0.0  # Leistungspreis auf diese Spitze
 
 
 def berechne_lcoh(bilanz: pd.DataFrame, config: ToolConfig) -> LCOHErgebnis:
@@ -53,6 +55,7 @@ def berechne_lcoh(bilanz: pd.DataFrame, config: ToolConfig) -> LCOHErgebnis:
         + wirtschaft.capex_backup_eur
         + wirtschaft.capex_speicher_eur
         + wirtschaft.capex_anschluss_eur
+        + wirtschaft.capex_netzanschluss_eur
     )
     af = annuitaetsfaktor(wirtschaft.wacc, wirtschaft.abschreibungsdauer_jahre)
     jahreskosten_kapital = capex_gesamt * af
@@ -62,21 +65,29 @@ def berechne_lcoh(bilanz: pd.DataFrame, config: ToolConfig) -> LCOHErgebnis:
 
     # Direktstrom: nur bei preisgesteuertem Betrieb mit Kosten belegt (Marktpreis der
     # Stunde, negativ = Erloes); sonst kostenlos.
-    direktstrom_kosten = (
-        float(bilanz["direktstrom_kosten_eur"].sum())
-        if "direktstrom_kosten_eur" in bilanz
-        else 0.0
-    )
+    if "direktstrom_kosten_eur" in bilanz:
+        direktstrom_kosten = float(bilanz["direktstrom_kosten_eur"].sum())
+    elif not config.regulatorik.netzentgeltbefreiung_direktanschluss:
+        # Ohne Steuerung ist Direktstrom sonst kostenlos; ohne Befreiung zahlt er Netzentgelt.
+        direktstrom_kosten = bilanz["direktanschluss_kwh"].sum() / 1000 * wirtschaft.netzentgelt_eur_pro_mwh
+    else:
+        direktstrom_kosten = 0.0
+
+    netzbezug_spitze_kw = float(bilanz["rueckfall_kwh"].max()) if len(bilanz) else 0.0
+    leistungspreis_kosten = netzbezug_spitze_kw * wirtschaft.leistungspreis_eur_pro_kw_a
 
     lcoh_je_szenario: dict[str, float] = {}
     jahreskosten_betrieb_je_szenario: dict[str, float] = {}
     for szenario in ("best_case", "realistisch", "worst_case"):
         strompreis = wirtschaft.strompreisszenarien.preis(szenario)
         kosten_rueckfallstrom = rueckfall_kwh / 1000 * (
-            strompreis + wirtschaft.netzentgelt_eur_pro_mwh
+            strompreis + wirtschaft.netzentgelt_eur_pro_mwh + wirtschaft.abgaben_eur_pro_mwh
         )
         jahreskosten_betrieb = (
-            wirtschaft.opex_fix_eur_pro_jahr + kosten_rueckfallstrom + direktstrom_kosten
+            wirtschaft.opex_fix_eur_pro_jahr
+            + kosten_rueckfallstrom
+            + direktstrom_kosten
+            + leistungspreis_kosten
         )
         jahreskosten_betrieb_je_szenario[szenario] = jahreskosten_betrieb
         lcoh_je_szenario[szenario] = (
@@ -99,6 +110,8 @@ def berechne_lcoh(bilanz: pd.DataFrame, config: ToolConfig) -> LCOHErgebnis:
         jaehrliche_waermemenge_mwh=jaehrliche_waermemenge_mwh,
         lcoh_fossile_referenz_eur_pro_mwh=lcoh_referenz,
         direktstrom_kosten_eur=direktstrom_kosten,
+        netzbezug_spitze_kw=netzbezug_spitze_kw,
+        leistungspreis_kosten_eur=leistungspreis_kosten,
     )
 
 

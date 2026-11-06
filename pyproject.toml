@@ -16,8 +16,9 @@ dependencies = [
 [project.optional-dependencies]
 # Erzeugungsprofil per Schnellabschaetzung (windpark.quelle: windpowerlib)
 wind = ["windpowerlib>=0.2.2"]
-# ERA5-Direktabruf aus dem Copernicus CDS (wetterquelle: era5), braucht CDS-Account
-era5 = ["cdsapi"]
+# ERA5-Direktabruf aus dem Copernicus CDS (wetterquelle: era5), braucht CDS-Account;
+# xarray/netCDF4 lesen die ERA5-Rauigkeit (netCDF)
+era5 = ["cdsapi", "xarray", "netCDF4"]
 # Day-Ahead-Marktpreise von der ENTSO-E Transparency Platform (marktpreise_abruf.py)
 entsoe = ["entsoe-py"]
 # Waermelast aus Gebaeudetypen (waermebedarf.lpagg); lpagg ist nicht auf PyPI,
@@ -27,6 +28,8 @@ dev = ["pytest>=7.4"]
 alle = [
     "windpowerlib>=0.2.2",
     "cdsapi",
+    "xarray",
+    "netCDF4",
     "entsoe-py",
     "lpagg @ https://github.com/jnettels/lpagg/archive/fc693a2bb4d1941f1120e8959c567d43af22ccbb.zip",
     "pytest>=7.4",

@@ -21,6 +21,7 @@ def _wetter(stunden=48, wind=8.0):
 
 
 def _cfg(**kwargs):
+    kwargs.setdefault("rauigkeitsquelle", "konstant")
     return WindpowerlibConfig(breitengrad=53.6, laengengrad=10.6, **kwargs)
 
 
@@ -40,3 +41,18 @@ def test_windprofil_skaliert_mit_anlagenzahl_und_parkwirkungsgrad():
 def test_windprofil_ohne_wind_ist_null():
     profil = berechne_windprofil(_wetter(wind=0.0), _cfg())
     assert profil.sum() == pytest.approx(0.0)
+
+
+def test_windprofil_nutzt_era5_rauigkeit_aus_den_wetterdaten():
+    # Glatte Oberflaeche -> weniger Scherung -> bei 100 m -> 129 m geringerer Zuwachs
+    # als bei rauer Oberflaeche; also mehr Ertrag mit groesserem z0.
+    wetter_glatt = _wetter(wind=6.0).assign(rauigkeit_m=0.01)
+    wetter_rau = _wetter(wind=6.0).assign(rauigkeit_m=1.0)
+    glatt = berechne_windprofil(wetter_glatt, _cfg(rauigkeitsquelle="era5"))
+    rau = berechne_windprofil(wetter_rau, _cfg(rauigkeitsquelle="era5"))
+    assert rau.sum() > glatt.sum()
+
+
+def test_windprofil_era5_rauigkeit_ohne_spalte_wirft_fehler():
+    with pytest.raises(ValueError, match="rauigkeit_m"):
+        berechne_windprofil(_wetter(), _cfg(rauigkeitsquelle="era5"))

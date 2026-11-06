@@ -23,6 +23,9 @@ windpark:
   #   # open_meteo: nur fuer Demo/nicht-kommerziell (Lizenz der kostenlosen API)
   #   # csv: eigene Wetterdatei (wetter_pfad, wind_messhoehe_m)
   #   wetterquelle: era5
+  #   # Rauigkeit z0: auto (= era5 bei ERA5-Wetter) | era5 | konstant
+  #   rauigkeitsquelle: auto
+  #   rauigkeitslaenge_m: 0.15   # Wert bei "konstant" bzw. Rueckfallwert
 
 waermebedarf:
   # Vorrang 1: projektbezogene CSV (stundenscharf)

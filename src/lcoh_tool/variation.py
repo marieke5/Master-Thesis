@@ -65,6 +65,12 @@ def variiere(
                     "speicher_kwh": kapazitaet,
                     "schwelle_eur_mwh": schwelle,
                     "lcoh_eur_mwh": e.lcoh.lcoh_eur_pro_mwh,
+                    "vorteil_vs_netzbezug_eur_mwh": e.vergleich.vorteil_direktleitung_eur_pro_mwh[
+                        e.vergleich.szenario_aktiv
+                    ],
+                    "breakeven_leitung_eur": e.vergleich.breakeven_leitungskosten_eur[
+                        e.vergleich.szenario_aktiv
+                    ],
                     "direktstrom_eur_mwh": k.direktstrom_durchschnittspreis_eur_mwh,
                     "direktstrom_kosten_eur": k.direktstrom_kosten_eur,
                     "rueckfall_mwh": k.rueckfall_mwh,

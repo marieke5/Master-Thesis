@@ -42,6 +42,21 @@ Anwendungsfall: Windpark- und Nahwärmeprojekt in Siebeneichen (Amt Büchen).
 - **Explizit außerhalb des Scopes:** Umbau/Erweiterung des Nahwärmenetzes
   selbst sowie die Modellierung der Windenergieerzeugung.
 
+## Vergleich: Direktleitung oder reiner Netzbezug
+
+Das Tool stellt zwei Varianten gegenüber (`vergleich.py`, Ausgabe „Vergleich“):
+**A** = nur Netzbezug (Wärmepumpe + Backup + Wärmespeicher, Strom zu Szenariopreis + Netzentgelt + Abgaben,
+keine Leitung; der Wärmespeicher gilt in beiden Varianten gleich) und **B** = Direktleitung + Netzbezug (normale Rechnung).
+Ausgegeben werden LCOH beider Varianten je Szenario, der Vorteil der Direktleitung (A − B,
+positiv = lohnt sich) und die **Break-even-Leitungskosten**: die maximale Investition in die
+Direktleitung (`capex_anschluss_eur`), bei der beide gleich teuer sind. Die Variationsrechnung
+enthält beides als Spalten. Regulatorik: `regulatorik.netzentgeltbefreiung_direktanschluss` (Standard `true`) legt fest, ob der
+Direktstrom netzentgeltfrei ist. Bei `false` zahlt auch er das Netzentgelt; der Netzbezug
+(Rückfall, z. B. bei Windstille) zahlt es immer. Leistungspreis: `leistungspreis_eur_pro_kw_a` (€/kW und Jahr) wird auf die Jahreshöchstlast des
+Netzbezugs berechnet (A: höchste Stundenleistung der Wärmeerzeuger; B: höchster Rückfallstrom).
+Annahmen: gleiche Fixkosten in A und B; `abgaben_eur_pro_mwh` und
+`capex_netzanschluss_eur` (Standard 0) gelten für beide Varianten.
+
 ## Referenzjahr
 
 `referenzjahr` (oberste Ebene der YAML) legt ein Wetter-/Marktjahr für alles fest: ERA5-Wind

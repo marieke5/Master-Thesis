@@ -188,6 +188,7 @@ def erzeuge_waermelast_lpagg(
                     laengengrad=laenge,
                     jahr=jahr,
                     wetterquelle="era5",
+                    rauigkeitsquelle="konstant",  # lpagg braucht nur die Temperatur
                     wetter_cache_ordner=cfg.wetter_cache_ordner,
                 )
             )

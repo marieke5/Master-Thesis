@@ -45,6 +45,24 @@ def zeige_ergebnis(ergebnis: ProjektErgebnis) -> None:
         f"{ergebnis.anteil_direktanschluss_prozent:.1f} %"
     )
 
+    v = ergebnis.vergleich
+    print("Vergleich: Direktleitung + Netzbezug (B) gegen reinen Netzbezug (A), EUR/MWh:")
+    for szenario in v.lcoh_direktleitung_eur_pro_mwh:
+        print(f"  - {szenario}: B {v.lcoh_direktleitung_eur_pro_mwh[szenario]:.1f}, "
+              f"A {v.lcoh_netzbezug_eur_pro_mwh[szenario]:.1f}, "
+              f"Vorteil Direktleitung {v.vorteil_direktleitung_eur_pro_mwh[szenario]:+.1f}, "
+              f"Break-even Leitungskosten {v.breakeven_leitungskosten_eur[szenario]:,.0f} EUR")
+    if ergebnis.config.wirtschaft.leistungspreis_eur_pro_kw_a > 0:
+        print(f"  Leistungspreis {ergebnis.config.wirtschaft.leistungspreis_eur_pro_kw_a:g} EUR/kW*a: "
+              f"A Spitze {v.referenz.netzbezug_spitze_kw:,.0f} kW ({v.referenz.leistungspreis_kosten_eur:,.0f} EUR/a), "
+              f"B Spitze {ergebnis.lcoh.netzbezug_spitze_kw:,.0f} kW ({ergebnis.lcoh.leistungspreis_kosten_eur:,.0f} EUR/a)")
+    befreit = ergebnis.config.regulatorik.netzentgeltbefreiung_direktanschluss
+    print(f"  Annahme: Direktstrom {'netzentgeltfrei' if befreit else 'MIT Netzentgelt'}; "
+          "Netzbezug (Rueckfall) zahlt immer Netzentgelt.")
+    urteil = "LOHNT SICH" if v.direktleitung_lohnt_sich else "lohnt sich NICHT"
+    print(f"  => Direktleitung {urteil} im Szenario '{v.szenario_aktiv}' "
+          f"(angesetzte Leitungskosten {v.leitungskosten_aktuell_eur:,.0f} EUR).")
+
     k = ergebnis.kennzahlen
     print("Kennzahlen zur Plausibilitaet:")
     print(f"  Windstrom: {k.erzeugung_mwh:,.0f} MWh/a, Spitze {k.erzeugung_spitze_kw:,.0f} kW, "

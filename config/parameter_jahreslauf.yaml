@@ -74,11 +74,14 @@ wirtschaft:
   capex_waermepumpe_eur: 600000
   capex_backup_eur: 150000
   capex_speicher_eur: 200000
-  capex_anschluss_eur: 400000
+  capex_anschluss_eur: 400000     # Direktleitung (nur Direktleitungs-Fall)
+  capex_netzanschluss_eur: 0      # Netzanschluss/-verstaerkung (in beiden Faellen)
+  leistungspreis_eur_pro_kw_a: 30  # PLATZHALTER: Leistungspreis EUR/(kW*a) auf die Jahreshoechstlast des Netzbezugs
+  abgaben_eur_pro_mwh: 0          # Umlagen/Steuern auf Netzbezug, zusaetzlich zum Netzentgelt
   opex_fix_eur_pro_jahr: 30000
 
 regulatorik:
-  netzentgeltbefreiung_direktanschluss: true
+  netzentgeltbefreiung_direktanschluss: true   # false: auch der Direktstrom zahlt Netzentgelt
 
 fossile_referenz:
   aktiv: true

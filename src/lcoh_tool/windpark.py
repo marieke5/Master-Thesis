@@ -16,7 +16,7 @@ import re
 import pandas as pd
 
 from lcoh_tool.config import WindpowerlibConfig
-from lcoh_tool.wetterdaten import lade_wetterdaten
+from lcoh_tool.wetterdaten import RAUIGKEIT_SPALTE, lade_wetterdaten, rauigkeitsquelle
 
 
 def erzeuge_windprofil(cfg: WindpowerlibConfig) -> pd.Series:
@@ -43,7 +43,15 @@ def berechne_windprofil(wetter: pd.DataFrame, cfg: WindpowerlibConfig) -> pd.Ser
         raise ValueError("Wetterdaten enthalten keine Spalte 'wind_<h>m_ms'.")
     spalten[("temperature", 2)] = wetter["temperatur_c"] + 273.15  # Kelvin
     spalten[("pressure", 0)] = wetter["druck_hpa"] * 100.0  # Pascal
-    spalten[("roughness_length", 0)] = cfg.rauigkeitslaenge_m
+    if rauigkeitsquelle(cfg) == "era5":
+        if RAUIGKEIT_SPALTE not in wetter.columns:
+            raise ValueError(
+                "rauigkeitsquelle 'era5', aber die Wetterdaten enthalten keine Spalte "
+                f"'{RAUIGKEIT_SPALTE}' (Wetter ueber lade_wetterdaten laden)."
+            )
+        spalten[("roughness_length", 0)] = wetter[RAUIGKEIT_SPALTE]
+    else:
+        spalten[("roughness_length", 0)] = cfg.rauigkeitslaenge_m
 
     wetter_wpl = pd.DataFrame(spalten, index=wetter.index)
     wetter_wpl.columns = pd.MultiIndex.from_tuples(

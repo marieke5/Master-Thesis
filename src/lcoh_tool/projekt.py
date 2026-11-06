@@ -23,6 +23,7 @@ from lcoh_tool.waermebedarf import (
     lastverteilung_platzhalter,
     load_waermebedarf,
 )
+from lcoh_tool.vergleich import Vergleich, berechne_netzbezug_referenz, berechne_vergleich
 from lcoh_tool.wirtschaftlichkeit import LCOHErgebnis, berechne_lcoh
 
 
@@ -60,6 +61,7 @@ class ProjektErgebnis:
     lcoh: LCOHErgebnis
     anteil_direktanschluss_prozent: float
     kennzahlen: Kennzahlen
+    vergleich: Vergleich
 
 
 def berechne_kennzahlen(bilanz: pd.DataFrame, config: ToolConfig) -> Kennzahlen:
@@ -270,6 +272,7 @@ def berechne_projekt(
     else:
         bilanz = berechne_bilanz(erzeugung, waermelast, config)
     lcoh = berechne_lcoh(bilanz, config)
+    vergleich = berechne_vergleich(lcoh, berechne_netzbezug_referenz(waermelast, config), config)
 
     direkt = bilanz["direktanschluss_kwh"].sum()
     gesamt = direkt + bilanz["rueckfall_kwh"].sum()
@@ -283,4 +286,5 @@ def berechne_projekt(
         lcoh=lcoh,
         anteil_direktanschluss_prozent=anteil,
         kennzahlen=berechne_kennzahlen(bilanz, config),
+        vergleich=vergleich,
     )

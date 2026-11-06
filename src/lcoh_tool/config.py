@@ -34,6 +34,7 @@ class WindpowerlibConfig:
     anzahl_anlagen: int = 1
     parkwirkungsgrad: float = 0.9  # pauschale Abschattungs-/Parkverluste (0..1)
     rauigkeitslaenge_m: float = 0.15
+    rauigkeitsquelle: Literal["auto", "konstant", "era5"] = "auto"
     # era5 (Copernicus CDS) erlaubt nach Lizenz auch kommerzielle Nutzung;
     # open_meteo ist in der kostenlosen Variante nur nicht-kommerziell nutzbar.
     wetterquelle: Wetterquelle = "era5"
@@ -165,7 +166,12 @@ class WirtschaftConfig:
     capex_waermepumpe_eur: float = 0.0
     capex_backup_eur: float = 0.0
     capex_speicher_eur: float = 0.0
-    capex_anschluss_eur: float = 0.0  # Direktleitung/Anschlusskosten
+    capex_anschluss_eur: float = 0.0  # Direktleitung (nur im Direktleitungs-Fall)
+    capex_netzanschluss_eur: float = 0.0  # Netzanschluss/-verstaerkung (in beiden Faellen)
+    abgaben_eur_pro_mwh: float = 0.0  # Umlagen/Steuern auf Netzbezug (zusaetzlich zum Netzentgelt)
+    # Leistungspreis des Netzentgelts: EUR je kW und Jahr auf die Jahreshoechstlast des
+    # Netzbezugs (wie bei registrierender Leistungsmessung). 0 = nicht beruecksichtigt.
+    leistungspreis_eur_pro_kw_a: float = 0.0
     opex_fix_eur_pro_jahr: float = 0.0
 
 
