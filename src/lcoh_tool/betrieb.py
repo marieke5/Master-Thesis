@@ -14,7 +14,9 @@ Reihenfolge der Bedarfsdeckung je Stunde: Direktstrom -> Speicher -> Netzbezug
 (Rueckfallstrom, mit Netzentgelt). Waermepumpe wird vor dem Elektrodenkessel
 eingesetzt; ``nennleistung_kw`` von Waermepumpe und Backup gilt als thermische
 Leistung, die Speicherkapazitaet als thermische Kapazitaet. Direktstrom wird zum
-Marktpreis der Stunde bewertet (Opportunitaetskosten; negativ = Erloes).
+Marktpreis der Stunde bewertet (Opportunitaetskosten; negativ = Erloes). Mit
+``regulatorik.netzentgeltbefreiung_direktanschluss: false`` kommt das Netzentgelt dazu.
+Der Netzbezug (Rueckfallstrom) zahlt immer Netzentgelt.
 
 Annahmen/Vereinfachungen: Speicher startet mit ``speicher_start_anteil``; der
 Endfuellstand wird nicht bilanziert; Wind, der nicht verbraucht wird, bleibt
@@ -117,6 +119,9 @@ def berechne_bilanz_preisgesteuert(
         strompreis = pd.Series(st.direktstrompreis_eur_pro_mwh, index=index, dtype=float)
     else:
         strompreis = preis.astype(float)
+        if not config.regulatorik.netzentgeltbefreiung_direktanschluss:
+            # Ohne Befreiung faellt auf den Direktstrom ebenfalls Netzentgelt an.
+            strompreis = strompreis + config.wirtschaft.netzentgelt_eur_pro_mwh
 
     return pd.DataFrame(
         {

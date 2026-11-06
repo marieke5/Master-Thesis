@@ -95,7 +95,6 @@ fossile_referenz:
 steuerung:
   # Preisgesteuerte Direktleitung: nur bei Marktpreis <= Schwelle (negativ/sehr niedrig),
   # ausser der Speicher ist fast leer und es wird Waerme gebraucht (Notbetrieb).
-  marktpreis_pfad: "data/marktpreise_beispiel.csv"   # CSV: zeitstempel, preis_eur_mwh (stuendlich)
   preisschwelle_eur_pro_mwh: 0
   speicher_untergrenze_stunden: 2     # "fast leer" = 2 Stunden Waermespitzenlast (Vorrang)
   speicher_untergrenze_anteil: 0.1    # nur wirksam, wenn *_stunden nicht gesetzt ist

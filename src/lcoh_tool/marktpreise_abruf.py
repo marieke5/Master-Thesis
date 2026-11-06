@@ -41,6 +41,25 @@ def lade_entsoe_preise(jahr: int, zone: str = "DE_LU", api_key: str | None = Non
     return normiere_preise(roh, jahr)
 
 
+def lade_preise_mit_cache(jahr: int, zone: str = "DE_LU", cache_ordner: str | Path = "data") -> pd.Series:
+    """Liest das Preisjahr aus dem Cache oder holt es von ENTSO-E und speichert es dort.
+
+    Cache-Datei: ``<cache_ordner>/marktpreise_<jahr>.csv`` (andere Zonen als DE_LU mit
+    Zonenkuerzel im Namen). Mit vorhandener Datei sind weder Token noch Internet noetig.
+    """
+    from lcoh_tool.marktpreise import load_marktpreise
+
+    name = f"marktpreise_{jahr}.csv" if zone == "DE_LU" else f"marktpreise_{zone}_{jahr}.csv"
+    ziel = Path(cache_ordner) / name
+    if ziel.exists():
+        return load_marktpreise(ziel)
+    preise = lade_entsoe_preise(jahr, zone)
+    ziel.parent.mkdir(parents=True, exist_ok=True)
+    preise.to_csv(ziel)
+    print(f"ENTSO-E-Preise {jahr} ({zone}) abgerufen und gespeichert: {ziel}")
+    return preise
+
+
 def normiere_preise(roh: pd.Series, jahr: int) -> pd.Series:
     """Stundenmittel in UTC (ohne Zeitzone), vollstaendig fuer das Jahr; kleine Luecken
     (bis 2 Stunden) werden vorwaertsgefuellt, groessere Luecken fuehren zu einem Fehler."""

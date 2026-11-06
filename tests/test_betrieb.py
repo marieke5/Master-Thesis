@@ -21,7 +21,6 @@ def _config(**steuerung):
     config.speicher.kapazitaet_kwh = 1000
     config.speicher.verlust_pro_stunde = 0.0
     werte = dict(
-        marktpreis_pfad="x.csv",
         preisschwelle_eur_pro_mwh=0.0,
         speicher_untergrenze_anteil=0.1,
         speicher_start_anteil=0.5,
@@ -172,3 +171,24 @@ def test_untergrenze_in_stunden_der_spitzenlast():
     # Anteil 10 % haette bei 1000 kWh nur 100 kWh Untergrenze -> kein Notbetrieb
     cfg2 = _config(speicher_start_anteil=0.15)
     assert not berechne_bilanz_preisgesteuert(wind, last, preis, cfg2)["notbetrieb"].iloc[0]
+
+
+def test_ohne_netzentgeltbefreiung_zahlt_direktstrom_netzentgelt():
+    wind, last, preis = _reihen([5000], [100], [-20])
+    cfg = _config()
+    cfg.wirtschaft.netzentgelt_eur_pro_mwh = 40.0
+    cfg.regulatorik.netzentgeltbefreiung_direktanschluss = True
+    frei = berechne_bilanz_preisgesteuert(wind, last, preis, cfg)["direktstrom_kosten_eur"].iloc[0]
+    cfg.regulatorik.netzentgeltbefreiung_direktanschluss = False
+    mit = berechne_bilanz_preisgesteuert(wind, last, preis, cfg)["direktstrom_kosten_eur"].iloc[0]
+    assert mit - frei == pytest.approx(0.15 * 40.0)  # 150 kWh Direktstrom * 40 EUR/MWh
+
+
+def test_ohne_steuerung_und_ohne_befreiung_kostet_direktstrom_netzentgelt():
+    config = load_config(ROOT / "config" / "parameter.yaml")
+    frei = berechne_projekt(config).lcoh
+    assert frei.direktstrom_kosten_eur == 0.0
+    config.regulatorik.netzentgeltbefreiung_direktanschluss = False
+    mit = berechne_projekt(config).lcoh
+    assert mit.direktstrom_kosten_eur > 0
+    assert mit.lcoh_eur_pro_mwh > frei.lcoh_eur_pro_mwh

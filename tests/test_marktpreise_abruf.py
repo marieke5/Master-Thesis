@@ -36,3 +36,24 @@ def test_ohne_token_fehler(monkeypatch):
     monkeypatch.delenv("ENTSOE_API_KEY", raising=False)
     with pytest.raises(ValueError, match="ENTSOE_API_KEY"):
         lade_entsoe_preise(2023)
+
+
+def test_cache_wird_gelesen_ohne_abruf(tmp_path, monkeypatch):
+    import lcoh_tool.marktpreise_abruf as m
+
+    idx = pd.date_range("2023-01-01", periods=3, freq="h", name="zeitstempel")
+    pd.Series([1.0, 2.0, 3.0], index=idx, name="preis_eur_mwh").to_csv(tmp_path / "marktpreise_2023.csv")
+    monkeypatch.setattr(m, "lade_entsoe_preise", lambda *a, **k: (_ for _ in ()).throw(AssertionError("Abruf")))
+    assert list(m.lade_preise_mit_cache(2023, "DE_LU", tmp_path)) == [1.0, 2.0, 3.0]
+
+
+def test_abruf_wird_gecacht(tmp_path, monkeypatch):
+    import lcoh_tool.marktpreise_abruf as m
+
+    idx = pd.date_range("2024-01-01", periods=3, freq="h", name="zeitstempel")
+    roh = pd.Series([5.0, 6.0, 7.0], index=idx, name="preis_eur_mwh")
+    aufrufe = []
+    monkeypatch.setattr(m, "lade_entsoe_preise", lambda j, z: aufrufe.append((j, z)) or roh)
+    m.lade_preise_mit_cache(2024, "DE_LU", tmp_path)
+    m.lade_preise_mit_cache(2024, "DE_LU", tmp_path)
+    assert aufrufe == [(2024, "DE_LU")] and (tmp_path / "marktpreise_2024.csv").exists()

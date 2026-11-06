@@ -19,10 +19,11 @@ from typing import Sequence
 import pandas as pd
 
 from lcoh_tool.config import ToolConfig, load_config
-from lcoh_tool.marktpreise import load_marktpreise
+
 from lcoh_tool.projekt import (
     berechne_projekt,
     lade_erzeugung,
+    lade_marktpreisreihe,
     lade_waermelast,
     wende_referenzjahr_an,
 )
@@ -48,7 +49,7 @@ def variiere(
     erzeugung = erzeugung if erzeugung is not None else lade_erzeugung(config)
     waermelast = waermelast if waermelast is not None else lade_waermelast(config)
     marktpreis = (
-        marktpreis if marktpreis is not None else load_marktpreise(config.steuerung.marktpreis_pfad)
+        marktpreis if marktpreis is not None else lade_marktpreisreihe(config)
     )
 
     zeilen = []

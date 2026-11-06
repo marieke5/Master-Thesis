@@ -17,7 +17,6 @@ from lcoh_tool.betrieb import berechne_bilanz_preisgesteuert
 from lcoh_tool.bilanz import berechne_bilanz
 from lcoh_tool.config import ToolConfig, load_config
 from lcoh_tool.erzeugungsprofil import load_erzeugungsprofil
-from lcoh_tool.marktpreise import load_marktpreise
 from lcoh_tool.waermebedarf import (
     GebaeudeLastparameter,
     lastverteilung_platzhalter,
@@ -235,6 +234,16 @@ def lade_waermelast(config: ToolConfig) -> pd.Series:
     )
 
 
+def lade_marktpreisreihe(config: ToolConfig) -> pd.Series:
+    """Day-Ahead-Preise des ``referenzjahr`` von ENTSO-E (mit Cache, siehe marktpreise_abruf)."""
+    st = config.steuerung
+    if config.referenzjahr is None:
+        raise ValueError("Die Marktpreise kommen von ENTSO-E und brauchen ein referenzjahr.")
+    from lcoh_tool.marktpreise_abruf import lade_preise_mit_cache
+
+    return lade_preise_mit_cache(config.referenzjahr, st.marktpreis_zone, st.marktpreis_cache_ordner)
+
+
 def berechne_projekt(
     config: ToolConfig | str | Path,
     erzeugungsprofil: pd.Series | None = None,
@@ -264,7 +273,7 @@ def berechne_projekt(
         marktpreis = (
             marktpreisprofil
             if marktpreisprofil is not None
-            else load_marktpreise(config.steuerung.marktpreis_pfad)
+            else lade_marktpreisreihe(config)
         )
         marktpreis = waehle_jahr(marktpreis, config.referenzjahr, "Marktpreisreihe")
         marktpreis = gleiche_jahr_an(marktpreis, waermelast)

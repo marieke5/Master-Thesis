@@ -170,3 +170,9 @@ pytest
 Erstes Gerüst (Platzhalter-Logik in `bilanz.py` und `wirtschaftlichkeit.py`,
 lauffähig mit Beispieldaten). Die eigentliche Modellierung wird im Laufe der
 Bearbeitung ergänzt.
+
+### Marktpreise (ENTSO-E)
+
+Die Day-Ahead-Preise des `referenzjahr` werden immer automatisch von ENTSO-E geholt (Token in
+`$env:ENTSOE_API_KEY`, `pip install -e ".[entsoe]"`) und als `data/marktpreise_<jahr>.csv`
+gespeichert. Ist die Datei da, braucht der Lauf weder Token noch Internet.

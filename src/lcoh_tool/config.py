@@ -205,7 +205,8 @@ class SteuerungConfig:
     thermische Leistung.
     """
 
-    marktpreis_pfad: Any  # CSV (zeitstempel, preis_eur_mwh) oder hochgeladene Datei
+    marktpreis_zone: str = "DE_LU"
+    marktpreis_cache_ordner: str = "data"
     preisschwelle_eur_pro_mwh: float = 0.0
     speicher_untergrenze_anteil: float = 0.1
     # Alternative zum Anteil: "fast leer" als Stunden der Waermespitzenlast (unabhaengig von
