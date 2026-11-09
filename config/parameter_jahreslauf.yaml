@@ -12,24 +12,18 @@ projektname: "Jahreslauf ERA5 + lpagg (Beispielwerte)"
 referenzjahr: 2023
 
 windpark:
-  quelle: windpowerlib
-  windpowerlib:
-    breitengrad: 53.5          # TODO: echte Koordinaten des Windparks
-    laengengrad: 10.6
-    jahr: 2023                 # Wetterjahr (wird vom referenzjahr ueberschrieben)
-    anlagentyp: "E-141/4200"   # Name aus der windpowerlib-Anlagendatenbank
-    nabenhoehe_m: 129
-    anzahl_anlagen: 3
-    parkwirkungsgrad: 0.9
-    wetterquelle: era5         # era5 | open_meteo (nur nicht-kommerziell) | csv
+  verfuegbarkeit: 0.97        # PLATZHALTER: Anteil der Stunden, in denen die WEA laeuft
+  ausfall_dauer_h: 48         # Ausfaelle in Bloecken dieser Laenge (zufaellig, reproduzierbar)
+  quelle: csv
+  erzeugungsprofil_pfad: "data/Siebeneichen_AEP_Park_Time_Variation_Je_WEA_1.txt"
+  windpro_block: je_wea        # eine WEA (7,3 MW)
 
 waermebedarf:
-  # Prioritaet 1: stundenscharfe CSV (waermelast_pfad) -> dann entfaellt alles Folgende.
-  # Ohne CSV: Gesamtjahreswaermebedarf + Gebaeudetypen/-anzahl manuell. lpagg liefert
-  # nur die Lastverteilung; das Profil wird auf den Jahreswert skaliert.
   jahreswaermebedarf_mwh: 1110
   lpagg:
-    wetterquelle: era5         # Temperatur des Wetterjahres aus dem CDS (Standort/Jahr wie Windpark)
+    wetterquelle: era5
+    breitengrad: 53.5          
+    laengengrad: 10.75         
     # wetterjahr / breitengrad / laengengrad: optional, sonst die Werte des Windparks
     jahr: 2027                 # Kalenderjahr der Waermelast (Wochentage/Feiertage)
     feiertage_bundesland: SH
@@ -59,8 +53,10 @@ backup:
   nennleistung_kw: 1000
 
 speicher:
-  kapazitaet_kwh: 5000
-  verlust_pro_stunde: 0.002
+  max_ladeleistung_kw: 800    # thermische Ladeleistung; ohne Angabe nur durch die Erzeuger begrenzt
+  kapazitaet_kwh: 50000        # thermisch
+steuerung:
+  preisschwelle_eur_pro_mwh: 80   
 
 wirtschaft:
   wacc: 0.05
@@ -101,3 +97,13 @@ steuerung:
   speicher_untergrenze_anteil: 0.1    # nur wirksam, wenn *_stunden nicht gesetzt ist
   speicher_start_anteil: 0.5
   direktstrom_bepreisung: marktpreis  # marktpreis | fest (dann direktstrompreis_eur_pro_mwh)
+
+# PPA-Betrieb (optional): Stromversorgung per PPA mit festem Preis, Abrechnung pay-as-consumed.
+# Das Tool vergleicht (1) Netzbezug ohne PPA, (2) PPA ueber das Netz, (3) PPA mit Direktleitung.
+# Ohne diesen Block gilt die preisgesteuerte Betriebsweise aus 'steuerung' (ENTSO-E-Preise).
+# Mit PPA entfallen Preisschwelle und Marktpreisreihe (kein Token noetig).
+ppa:
+  preis_eur_pro_mwh: 60                    # PLATZHALTER: PPA-Preis, in allen PPA-Faellen gleich
+  sleeving_eur_pro_mwh: 0                  # PLATZHALTER: Lieferantenaufschlag, nur PPA ueber das Netz
+  abgaben_direktleitung_eur_pro_mwh: 0     # Abgaben auch auf Direktstrom, z. B. Stromsteuer (WEA > 2 MW; aktuellen Satz pruefen)
+  # vergleichswert_eur_pro_mwh: 70         # optional: Stromgestehungskosten/Marktwert der WEA -> Hinweis bei zu niedrigem PPA-Preis

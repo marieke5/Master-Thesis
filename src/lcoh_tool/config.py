@@ -56,6 +56,13 @@ class WindparkConfig:
     erzeugungsprofil_pfad: Optional[Any] = None  # CSV-Pfad oder hochgeladene Datei
     quelle: Literal["csv", "windpowerlib"] = "csv"
     windpowerlib: Optional[WindpowerlibConfig] = None
+    windpro_block: Literal["gesamt", "je_wea"] = "gesamt"
+    # Verfuegbarkeit der WEA (Anteil der Stunden, 0..1). Ausfaelle werden in Bloecken von
+    # ``ausfall_dauer_h`` Stunden zufaellig (reproduzierbar ueber ``ausfall_seed``) auf Null gesetzt.
+    # Nur setzen, wenn der Ertrag (z. B. WindPRO-Reihe) keine Verfuegbarkeit enthaelt.
+    verfuegbarkeit: float = 1.0
+    ausfall_dauer_h: int = 48
+    ausfall_seed: int = 42
 
 
 @dataclass
@@ -134,6 +141,9 @@ class BackupConfig:
 class SpeicherConfig:
     kapazitaet_kwh: float
     verlust_pro_stunde: float = 0.0  # Anteil Speicherverlust je Stunde (0..1)
+    # Maximale thermische Ladeleistung (kW Waerme) in den Speicher, zusaetzlich zur Deckung der
+    # aktuellen Last. None = nur durch Waermepumpe + Kessel begrenzt.
+    max_ladeleistung_kw: Optional[float] = None
 
 
 @dataclass
@@ -218,6 +228,26 @@ class SteuerungConfig:
 
 
 @dataclass
+class PpaConfig:
+    """Stromversorgung per PPA (fester Preis, Abrechnung pay-as-consumed).
+
+    Verglichen werden drei Faelle mit demselben Betrieb und demselben PPA-Preis:
+    (1) reiner Netzbezug ohne PPA, (2) PPA ueber das Netz, (3) PPA mit Direktleitung.
+    Mit PPA nutzt die Waermeseite Windstrom, wann immer er verfuegbar ist; die
+    Preisschwelle der ``steuerung`` und die Marktpreisreihe werden nicht gebraucht.
+    ``wirtschaft.abgaben_eur_pro_mwh`` (alle Umlagen/Steuern auf Netzstrom) fallen im Fall 2
+    auf den PPA-Strom an, im Fall 3 nur ``abgaben_direktleitung_eur_pro_mwh`` (z. B. Stromsteuer).
+    """
+
+    preis_eur_pro_mwh: float
+    sleeving_eur_pro_mwh: float = 0.0  # Lieferantenaufschlag/Bilanzierung, nur PPA ueber das Netz
+    abgaben_direktleitung_eur_pro_mwh: float = 0.0  # Abgaben, die auch auf Direktstrom anfallen
+    # Vergleichswert der WEA (Stromgestehungskosten oder Marktwert): Liegt der PPA-Preis
+    # darunter, gibt das Tool einen Hinweis (Deal fuer den Windpark unattraktiv).
+    vergleichswert_eur_pro_mwh: Optional[float] = None
+
+
+@dataclass
 class ToolConfig:
     projektname: str
     windpark: WindparkConfig
@@ -232,6 +262,7 @@ class ToolConfig:
     # Referenzjahr: ein Wetter-/Marktjahr fuer alles (Wind per windpowerlib, ERA5-Temperatur
     # fuer lpagg, Auswahl aus mehrjaehrigen Wind-/Preis-CSV). Siehe projekt.py.
     referenzjahr: Optional[int] = None
+    ppa: Optional[PpaConfig] = None
 
 
 def load_config(pfad: str | Path) -> ToolConfig:
@@ -285,4 +316,5 @@ def load_config(pfad: str | Path) -> ToolConfig:
             else None
         ),
         referenzjahr=rohdaten.get("referenzjahr"),
+        ppa=PpaConfig(**rohdaten["ppa"]) if rohdaten.get("ppa") else None,
     )

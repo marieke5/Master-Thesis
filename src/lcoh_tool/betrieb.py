@@ -41,7 +41,8 @@ def berechne_bilanz_preisgesteuert(
     st = config.steuerung
     if st is None:
         raise ValueError("Keine Steuerung (Block 'steuerung') in der Config gesetzt.")
-    if st.direktstrom_bepreisung == "fest" and st.direktstrompreis_eur_pro_mwh is None:
+    ppa = config.ppa
+    if ppa is None and st.direktstrom_bepreisung == "fest" and st.direktstrompreis_eur_pro_mwh is None:
         raise ValueError("direktstrom_bepreisung 'fest' braucht direktstrompreis_eur_pro_mwh.")
 
     index = waermelast_kwh.index
@@ -66,7 +67,11 @@ def berechne_bilanz_preisgesteuert(
         untergrenze = min(st.speicher_untergrenze_stunden * float(last.max()), kap)
     else:
         untergrenze = st.speicher_untergrenze_anteil * kap
-    schwelle = st.preisschwelle_eur_pro_mwh
+    # Mit PPA ist Windstrom immer guenstiger als Netzbezug: Direktleitung nutzt ihn, wann
+    # immer er verfuegbar ist (Preisschwelle entfaellt).
+    max_lade = config.speicher.max_ladeleistung_kw
+    max_lade = float("inf") if max_lade is None else float(max_lade)
+    schwelle = float("inf") if ppa is not None else st.preisschwelle_eur_pro_mwh
 
     n = len(index)
     aktiv = [False] * n
@@ -77,6 +82,11 @@ def berechne_bilanz_preisgesteuert(
     waerme_direkt = [0.0] * n
     aus_speicher = [0.0] * n
     luecke = [0.0] * n
+    wp_direkt = [0.0] * n  # Strom (kWh) je Erzeuger und Quelle, fuer Auswertungen/Plots
+    bk_direkt = [0.0] * n
+    wp_netz = [0.0] * n
+    bk_netz = [0.0] * n
+    beladung = [0.0] * n  # tatsaechlich in den Speicher geladene Waerme (kWh)
 
     s = st.speicher_start_anteil * kap
     for i in range(n):
@@ -90,15 +100,22 @@ def berechne_bilanz_preisgesteuert(
 
         hw = hb = 0.0
         if aktiv[i]:
-            ziel = q + max(kap - s, 0.0) if niedrig else q
+            ziel = q + min(max(kap - s, 0.0), max_lade) if niedrig else q
             hw = min(p_wp, ziel, w * jazl)
-            hb = min(p_bk, ziel - hw, (w - hw / jazl) * eta)
+            # Mit PPA (Strom immer kostenpflichtig) laedt nur die Waermepumpe den Speicher; der
+            # Kessel (Wirkungsgrad ~1) springt nur fuer die aktuelle Last ein.
+            hb_ziel = max(q - hw, 0.0) if ppa is not None else ziel - hw
+            hb = min(p_bk, hb_ziel, (w - hw / jazl) * eta)
             direkt[i] = hw / jazl + hb / eta
+            wp_direkt[i] = hw / jazl
+            bk_direkt[i] = hb / eta
         erzeugt = hw + hb
         waerme_direkt[i] = erzeugt
 
         gedeckt = min(erzeugt, q)
+        s_vor = s
         s = min(kap, s + (erzeugt - gedeckt))
+        beladung[i] = s - s_vor
         rest = q - gedeckt
 
         entnahme = min(rest, s)
@@ -110,12 +127,18 @@ def berechne_bilanz_preisgesteuert(
             hw2 = min(p_wp - hw, rest)
             hb2 = min(p_bk - hb, rest - hw2)
             rueckfall[i] = hw2 / jazl + hb2 / eta
+            wp_netz[i] = hw2 / jazl
+            bk_netz[i] = hb2 / eta
             rest -= hw2 + hb2
         luecke[i] = max(rest, 0.0)
         stand[i] = s
 
     direkt_s = pd.Series(direkt, index=index)
-    if st.direktstrom_bepreisung == "fest":
+    if ppa is not None:
+        strompreis = pd.Series(
+            ppa.preis_eur_pro_mwh + ppa.abgaben_direktleitung_eur_pro_mwh, index=index, dtype=float
+        )
+    elif st.direktstrom_bepreisung == "fest":
         strompreis = pd.Series(st.direktstrompreis_eur_pro_mwh, index=index, dtype=float)
     else:
         strompreis = preis.astype(float)
@@ -134,7 +157,12 @@ def berechne_bilanz_preisgesteuert(
             "speicherstand_kwh": stand,
             "direktanschluss_kwh": direkt_s,
             "rueckfall_kwh": rueckfall,
+            "strom_wp_direkt_kwh": wp_direkt,
+            "strom_bk_direkt_kwh": bk_direkt,
+            "strom_wp_netz_kwh": wp_netz,
+            "strom_bk_netz_kwh": bk_netz,
             "waerme_direkt_kwh": waerme_direkt,
+            "waerme_in_speicher_kwh": beladung,
             "waerme_aus_speicher_kwh": aus_speicher,
             "deckungsluecke_kwh": luecke,
             "direktstrom_preis_eur_mwh": strompreis,

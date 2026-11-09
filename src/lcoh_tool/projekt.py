@@ -15,6 +15,7 @@ import pandas as pd
 
 from lcoh_tool.betrieb import berechne_bilanz_preisgesteuert
 from lcoh_tool.bilanz import berechne_bilanz
+from lcoh_tool.verfuegbarkeit import wende_verfuegbarkeit_an
 from lcoh_tool.config import ToolConfig, load_config
 from lcoh_tool.erzeugungsprofil import load_erzeugungsprofil
 from lcoh_tool.waermebedarf import (
@@ -116,6 +117,13 @@ def berechne_kennzahlen(bilanz: pd.DataFrame, config: ToolConfig) -> Kennzahlen:
                 f"{luecke_mwh:,.0f} MWh Waerme bleiben ungedeckt: Leistung von Waermepumpe + "
                 "Backup bzw. Speicher reichen zeitweise nicht aus."
             )
+        ppa = config.ppa
+        if ppa is not None and ppa.vergleichswert_eur_pro_mwh is not None \
+                and ppa.preis_eur_pro_mwh < ppa.vergleichswert_eur_pro_mwh:
+            hinweise.append(
+                f"Der PPA-Preis ({ppa.preis_eur_pro_mwh:g} EUR/MWh) liegt unter dem Vergleichswert der WEA "
+                f"({ppa.vergleichswert_eur_pro_mwh:g} EUR/MWh): Fuer den Windpark waere der PPA unattraktiv."
+            )
         if bilanz["direktleitung_aktiv"].sum() == 0:
             hinweise.append(
                 "Die Direktleitung wurde nie genutzt: Preisschwelle oder Preisreihe pruefen."
@@ -202,7 +210,7 @@ def lade_erzeugung(config: ToolConfig) -> pd.Series:
         return erzeuge_windprofil(windpark.windpowerlib)
     if windpark.erzeugungsprofil_pfad is None:
         raise ValueError("Kein erzeugungsprofil_pfad (CSV) in der Config gesetzt.")
-    return load_erzeugungsprofil(windpark.erzeugungsprofil_pfad)
+    return load_erzeugungsprofil(windpark.erzeugungsprofil_pfad, windpark.windpro_block)
 
 
 def lade_waermelast(config: ToolConfig) -> pd.Series:
@@ -268,20 +276,25 @@ def berechne_projekt(
     erzeugung = waehle_jahr(erzeugung, config.referenzjahr, "Erzeugungsprofil")
     waermelast = waehle_jahr(waermelast, None, "Waermelastprofil")
     erzeugung = gleiche_jahr_an(erzeugung, waermelast)
+    wp = config.windpark
+    erzeugung = wende_verfuegbarkeit_an(erzeugung, wp.verfuegbarkeit, wp.ausfall_dauer_h, wp.ausfall_seed)
 
     if config.steuerung is not None:
-        marktpreis = (
-            marktpreisprofil
-            if marktpreisprofil is not None
-            else lade_marktpreisreihe(config)
-        )
-        marktpreis = waehle_jahr(marktpreis, config.referenzjahr, "Marktpreisreihe")
-        marktpreis = gleiche_jahr_an(marktpreis, waermelast)
+        if config.ppa is not None:  # fester PPA-Preis: keine Marktpreisreihe noetig
+            marktpreis = pd.Series(config.ppa.preis_eur_pro_mwh, index=waermelast.index, dtype=float)
+        else:
+            marktpreis = (
+                marktpreisprofil
+                if marktpreisprofil is not None
+                else lade_marktpreisreihe(config)
+            )
+            marktpreis = waehle_jahr(marktpreis, config.referenzjahr, "Marktpreisreihe")
+            marktpreis = gleiche_jahr_an(marktpreis, waermelast)
         bilanz = berechne_bilanz_preisgesteuert(erzeugung, waermelast, marktpreis, config)
     else:
         bilanz = berechne_bilanz(erzeugung, waermelast, config)
     lcoh = berechne_lcoh(bilanz, config)
-    vergleich = berechne_vergleich(lcoh, berechne_netzbezug_referenz(waermelast, config), config)
+    vergleich = berechne_vergleich(lcoh, berechne_netzbezug_referenz(waermelast, config), config, bilanz)
 
     direkt = bilanz["direktanschluss_kwh"].sum()
     gesamt = direkt + bilanz["rueckfall_kwh"].sum()

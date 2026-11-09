@@ -48,8 +48,14 @@ class Vergleich:
     breakeven_leitungskosten_eur: dict[str, float]  # max. tragbare Investition Direktleitung
     leitungskosten_aktuell_eur: float
     szenario_aktiv: str
-    direktleitung_lohnt_sich: bool  # fuer das aktive Szenario
+    direktleitung_lohnt_sich: bool  # fuer das aktive Szenario (mit PPA: gegen PPA ueber das Netz)
     referenz: NetzbezugReferenz
+    # Nur mit PPA (config.ppa): Fall 2 = PPA ueber das Netz (gleicher Betrieb wie B, aber mit
+    # Netzentgelt, Abgaben, Sleeving und Leistungspreis auf den PPA-Strom, ohne Leitung).
+    lcoh_ppa_netz_eur_pro_mwh: dict[str, float] | None = None
+    vorteil_vs_ppa_netz_eur_pro_mwh: dict[str, float] | None = None  # Fall 2 - Fall 3
+    breakeven_vs_ppa_netz_eur: dict[str, float] | None = None
+    ppa_netz_spitze_kw: float = 0.0
 
 
 def berechne_netzbezug_referenz(waermelast_kwh: pd.Series, config: ToolConfig) -> NetzbezugReferenz:
@@ -91,8 +97,33 @@ def berechne_netzbezug_referenz(waermelast_kwh: pd.Series, config: ToolConfig) -
     )
 
 
+def berechne_ppa_ueber_netz(bilanz: pd.DataFrame, config: ToolConfig) -> tuple[dict[str, float], float]:
+    """Fall 2: PPA ueber das Netz. Gleicher Betrieb (Bilanz) wie mit Direktleitung, aber der
+    PPA-Strom zahlt zusaetzlich Netzentgelt, Abgaben und Sleeving, der Leistungspreis gilt auf
+    die Spitze des gesamten Strombezugs, und es gibt keine Leitungskosten.
+    Gibt die LCOH je Szenario und die Netzspitze (kW) zurueck."""
+    w, ppa = config.wirtschaft, config.ppa
+    q_mwh = float(bilanz["waermelast_kwh"].sum() / 1000)
+    capex = w.capex_waermepumpe_eur + w.capex_backup_eur + w.capex_speicher_eur + w.capex_netzanschluss_eur
+    kapital = capex * annuitaetsfaktor(w.wacc, w.abschreibungsdauer_jahre)
+    direkt_mwh = float(bilanz["direktanschluss_kwh"].sum() / 1000)
+    rueck_mwh = float(bilanz["rueckfall_kwh"].sum() / 1000)
+    spitze = float((bilanz["direktanschluss_kwh"] + bilanz["rueckfall_kwh"]).max()) if len(bilanz) else 0.0
+    ppa_preis = ppa.preis_eur_pro_mwh + w.netzentgelt_eur_pro_mwh + w.abgaben_eur_pro_mwh + ppa.sleeving_eur_pro_mwh
+    lcoh = {}
+    for s in SZENARIEN:
+        rueck_preis = w.strompreisszenarien.preis(s) + w.netzentgelt_eur_pro_mwh + w.abgaben_eur_pro_mwh
+        kosten = (
+            w.opex_fix_eur_pro_jahr + direkt_mwh * ppa_preis + rueck_mwh * rueck_preis
+            + spitze * w.leistungspreis_eur_pro_kw_a
+        )
+        lcoh[s] = (kapital + kosten) / q_mwh
+    return lcoh, spitze
+
+
 def berechne_vergleich(
-    lcoh_b: LCOHErgebnis, referenz: NetzbezugReferenz, config: ToolConfig
+    lcoh_b: LCOHErgebnis, referenz: NetzbezugReferenz, config: ToolConfig,
+    bilanz: pd.DataFrame | None = None,
 ) -> Vergleich:
     """Stellt Direktleitung (B) und Netzbezug (A) gegenueber und bestimmt den Break-even."""
     w = config.wirtschaft
@@ -104,6 +135,14 @@ def berechne_vergleich(
     vorteil = {s: a[s] - b[s] for s in SZENARIEN}
     breakeven = {s: w.capex_anschluss_eur + vorteil[s] * q / af for s in SZENARIEN}
     aktiv = w.strompreisszenario_aktiv
+    ppa_netz = vorteil_ppa = breakeven_ppa = None
+    spitze_ppa = 0.0
+    lohnt = bool(vorteil[aktiv] > 0)
+    if config.ppa is not None and bilanz is not None:
+        ppa_netz, spitze_ppa = berechne_ppa_ueber_netz(bilanz, config)
+        vorteil_ppa = {s: ppa_netz[s] - b[s] for s in SZENARIEN}
+        breakeven_ppa = {s: w.capex_anschluss_eur + vorteil_ppa[s] * q / af for s in SZENARIEN}
+        lohnt = bool(vorteil_ppa[aktiv] > 0)
     return Vergleich(
         lcoh_direktleitung_eur_pro_mwh=b,
         lcoh_netzbezug_eur_pro_mwh=a,
@@ -111,6 +150,10 @@ def berechne_vergleich(
         breakeven_leitungskosten_eur=breakeven,
         leitungskosten_aktuell_eur=w.capex_anschluss_eur,
         szenario_aktiv=aktiv,
-        direktleitung_lohnt_sich=vorteil[aktiv] > 0,
+        direktleitung_lohnt_sich=lohnt,
         referenz=referenz,
+        lcoh_ppa_netz_eur_pro_mwh=ppa_netz,
+        vorteil_vs_ppa_netz_eur_pro_mwh=vorteil_ppa,
+        breakeven_vs_ppa_netz_eur=breakeven_ppa,
+        ppa_netz_spitze_kw=spitze_ppa,
     )

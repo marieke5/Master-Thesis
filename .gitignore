@@ -34,3 +34,6 @@ data/wetter_cache/
 variation*.csv
 .venv/
 *.egg-info/
+
+data/Siebeneichen_AEP_Park_Time_Variation_Je_WEA_1.txt
+nplots/

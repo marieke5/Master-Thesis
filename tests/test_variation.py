@@ -24,3 +24,24 @@ def test_variation_ohne_steuerung_fehler():
     config.steuerung = None
     with pytest.raises(ValueError, match="steuerung"):
         variiere(config, [1000], [0])
+
+
+def test_direktstrompreis_variation_und_breakeven():
+    from lcoh_tool.variation import breakeven_direktstrompreis
+
+    tabelle = variiere(load_config(CONFIG), [2000], [0], direktstrompreise_eur_mwh=[0, 50, 100])
+    assert list(tabelle["direktstrompreis_eur_mwh"]) == [0, 50, 100]
+    # teurerer Direktstrom -> hoehere LCOH der Direktleitung
+    assert tabelle["lcoh_eur_mwh"].is_monotonic_increasing
+    assert tabelle["vorteil_vs_netzbezug_eur_mwh"].is_monotonic_decreasing
+
+
+def test_breakeven_interpolation():
+    import pandas as pd
+
+    from lcoh_tool.variation import breakeven_direktstrompreis
+
+    g = pd.DataFrame({"direktstrompreis_eur_mwh": [0, 100], "vorteil_vs_netzbezug_eur_mwh": [10.0, -10.0]})
+    assert breakeven_direktstrompreis(g) == pytest.approx(50.0)
+    g["vorteil_vs_netzbezug_eur_mwh"] = [-5.0, -10.0]
+    assert breakeven_direktstrompreis(g) is None

@@ -56,11 +56,24 @@ def zeige_ergebnis(ergebnis: ProjektErgebnis) -> None:
         print(f"  Leistungspreis {ergebnis.config.wirtschaft.leistungspreis_eur_pro_kw_a:g} EUR/kW*a: "
               f"A Spitze {v.referenz.netzbezug_spitze_kw:,.0f} kW ({v.referenz.leistungspreis_kosten_eur:,.0f} EUR/a), "
               f"B Spitze {ergebnis.lcoh.netzbezug_spitze_kw:,.0f} kW ({ergebnis.lcoh.leistungspreis_kosten_eur:,.0f} EUR/a)")
+    if v.lcoh_ppa_netz_eur_pro_mwh is not None:
+        ppa = ergebnis.config.ppa
+        print(f"PPA-Vergleich (fester PPA-Preis {ppa.preis_eur_pro_mwh:g} EUR/MWh, pay-as-consumed), EUR/MWh:")
+        print("  Fall 1 = Netzbezug ohne PPA, Fall 2 = PPA ueber das Netz, Fall 3 = PPA mit Direktleitung")
+        for szenario in v.lcoh_direktleitung_eur_pro_mwh:
+            print(f"  - {szenario}: Fall 1 {v.lcoh_netzbezug_eur_pro_mwh[szenario]:.1f}, "
+                  f"Fall 2 {v.lcoh_ppa_netz_eur_pro_mwh[szenario]:.1f}, "
+                  f"Fall 3 {v.lcoh_direktleitung_eur_pro_mwh[szenario]:.1f}; "
+                  f"Direktleitung gegen Fall 2 {v.vorteil_vs_ppa_netz_eur_pro_mwh[szenario]:+.1f}, "
+                  f"Break-even Leitungskosten {v.breakeven_vs_ppa_netz_eur[szenario]:,.0f} EUR")
+        print(f"  Netzspitze (kW): Fall 1 {v.referenz.netzbezug_spitze_kw:,.0f}, "
+              f"Fall 2 {v.ppa_netz_spitze_kw:,.0f}, Fall 3 {ergebnis.lcoh.netzbezug_spitze_kw:,.0f}")
     befreit = ergebnis.config.regulatorik.netzentgeltbefreiung_direktanschluss
     print(f"  Annahme: Direktstrom {'netzentgeltfrei' if befreit else 'MIT Netzentgelt'}; "
           "Netzbezug (Rueckfall) zahlt immer Netzentgelt.")
     urteil = "LOHNT SICH" if v.direktleitung_lohnt_sich else "lohnt sich NICHT"
-    print(f"  => Direktleitung {urteil} im Szenario '{v.szenario_aktiv}' "
+    gegen = " gegen PPA ueber das Netz" if v.lcoh_ppa_netz_eur_pro_mwh is not None else ""
+    print(f"  => Direktleitung {urteil}{gegen} im Szenario '{v.szenario_aktiv}' "
           f"(angesetzte Leitungskosten {v.leitungskosten_aktuell_eur:,.0f} EUR).")
 
     k = ergebnis.kennzahlen
@@ -71,7 +84,11 @@ def zeige_ergebnis(ergebnis: ProjektErgebnis) -> None:
     print(f"  Strombedarf Waermepumpe: {k.strombedarf_wp_mwh:,.0f} MWh/a, "
           f"Spitze {k.strombedarf_wp_spitze_kw:,.0f} kW")
     print(f"  Rueckfallstrom: {k.rueckfall_mwh:,.1f} MWh/a in {k.rueckfall_stunden} Stunden")
-    if ergebnis.config.steuerung is not None:
+    if ergebnis.config.ppa is not None:
+        print(f"PPA-Betrieb: Direktleitung nutzt Windstrom, wann immer er verfuegbar ist "
+              f"({k.direktleitung_stunden} h); Direktstrom {k.direktstrom_mwh:,.0f} MWh, "
+              f"Rueckfall {k.rueckfall_mwh:,.1f} MWh in {k.rueckfall_stunden} h")
+    elif ergebnis.config.steuerung is not None:
         st = ergebnis.config.steuerung
         print(f"Preisgesteuerte Direktleitung (Schwelle {st.preisschwelle_eur_pro_mwh:g} EUR/MWh):")
         print(f"  Direktleitung aktiv: {k.direktleitung_stunden} h, davon Notbetrieb "
